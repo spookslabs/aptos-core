@@ -32,6 +32,7 @@ aptos-executor-types = { workspace = true }
 aptos-framework = { workspace = true }
 aptos-genesis = { workspace = true }
 aptos-indexer = { workspace = true, optional = true }
+aptos-indexer-http = { workspace = true, optional = true }
 aptos-infallible = { workspace = true }
 aptos-inspection-service = { workspace = true }
 aptos-logger = { workspace = true }
@@ -69,5 +70,5 @@ jemallocator = { workspace = true }
 default = []
 assert-private-keys-not-cloneable = ["aptos-crypto/assert-private-keys-not-cloneable"]
 failpoints = ["fail/failpoints", "aptos-consensus/failpoints", "aptos-executor/failpoints", "aptos-mempool/failpoints", "aptos-api/failpoints"]
-indexer = ["aptos-indexer"]
+indexer = ["aptos-indexer-http"]
 check-vm-features = []

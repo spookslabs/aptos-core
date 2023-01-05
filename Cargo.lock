@@ -1340,6 +1340,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "aptos-indexer-http"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "aptos-api",
+ "aptos-api-test-context",
+ "aptos-api-types",
+ "aptos-bitvec",
+ "aptos-config",
+ "aptos-logger",
+ "aptos-mempool",
+ "aptos-metrics-core",
+ "aptos-storage-interface",
+ "aptos-types",
+ "aptos-vm",
+ "async-trait",
+ "bcs 0.1.4 (git+https://github.com/aptos-labs/bcs.git?rev=d31fab9d81748e2594be5cd5cdf845786a30562d)",
+ "bigdecimal",
+ "chrono",
+ "clap 3.2.17",
+ "field_count",
+ "futures",
+ "hex",
+ "once_cell",
+ "regex",
+ "reqwest",
+ "reqwest-middleware",
+ "reqwest-retry",
+ "serde 1.0.149",
+ "serde_json",
+ "sha2 0.9.9",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "aptos-infallible"
 version = "0.1.0"
 
@@ -1726,6 +1762,7 @@ dependencies = [
  "aptos-framework",
  "aptos-genesis",
  "aptos-indexer",
+ "aptos-indexer-http",
  "aptos-infallible",
  "aptos-inspection-service",
  "aptos-logger",

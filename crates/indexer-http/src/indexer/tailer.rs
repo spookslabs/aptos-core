@@ -11,44 +11,23 @@ use anyhow::{ensure, Context, Result};
 use aptos_api::context::Context as ApiContext;
 use aptos_logger::{debug, info};
 use chrono::ParseError;
-use serde::{Serialize, Deserialize};
 use std::{fmt::Debug, sync::Arc};
 use tokio::{sync::Mutex, task::JoinHandle};
-use aptos_api_types::Transaction;
-
-#[derive(Serialize, Deserialize)]
-struct EndpointRequest {
-    transactions: Vec<EndpointTransaction>
-}
-
-#[derive(Serialize, Deserialize)]
-struct EndpointTransaction {
-    version: u64,
-    timestamp: u64,
-    events: Vec<EndpointEvent>
-}
-
-#[derive(Serialize, Deserialize)]
-struct EndpointEvent {
-    address: String,
-    #[serde(rename = "type")]
-    typ: String,
-    data: serde_json::Value
-}
+use aptos_api_types::{Transaction, WriteSetChange};
+use crate::indexer::processing_result::{EndpointTableChange, EndpointTransaction, EndpointEvent};
 
 #[derive(Clone)]
 pub struct Tailer {
     pub transaction_fetcher: Arc<Mutex<dyn TransactionFetcherTrait>>,
-    client: reqwest::Client,
-    endpoint: String,
-    events: Vec<String>
+    events: Vec<String>,
+    handles: Vec<String>
 }
 
 impl Tailer {
     pub fn new(
         context: Arc<ApiContext>,
-        endpoint: String,
         events: Vec<String>,
+        handles: Vec<String>,
         options: TransactionFetcherOptions,
     ) -> Result<Tailer, ParseError> {
         let resolver = Arc::new(context.move_resolver().unwrap());
@@ -56,9 +35,8 @@ impl Tailer {
 
         Ok(Self {
             transaction_fetcher: Arc::new(Mutex::new(transaction_fetcher)),
-            client: reqwest::Client::new(),
-            endpoint,
-            events
+            events,
+            handles
         })
     }
 
@@ -75,22 +53,22 @@ impl Tailer {
         &self,
     ) -> (
         u64,
-        Option<Result<ProcessingResult, TransactionProcessingError>>,
+        Option<ProcessingResult>,
     ) {
-        let transactions = self
+        let raw_transactions = self
             .transaction_fetcher
             .lock()
             .await
             .fetch_next_batch()
             .await;
 
-        let num_txns = transactions.len() as u64;
+        let num_txns = raw_transactions.len() as u64;
         // When the batch is empty b/c we're caught up
         if num_txns == 0 {
             return (0, None);
         }
-        let start_version = transactions.first().unwrap().version();
-        let end_version = transactions.last().unwrap().version();
+        let start_version = raw_transactions.first().unwrap().version();
+        let end_version = raw_transactions.last().unwrap().version();
 
         debug!(
             num_txns = num_txns,
@@ -101,17 +79,14 @@ impl Tailer {
 
         let batch_start = chrono::Utc::now().naive_utc();
 
-        // instead of using a processor filter by events and only send requested events
+        let mut transactions = vec![];
 
-        let mut request = EndpointRequest {
-            transactions: vec![]
-        };
-
-        for transaction in &transactions {
+        for transaction in &raw_transactions {
             if let Transaction::UserTransaction(transaction) = transaction {
                 if transaction.info.success {
 
                     let mut events = vec![];
+                    let mut changes = vec![];
 
                     for event in &transaction.events {
                         let typ = event.typ.to_string();
@@ -124,25 +99,43 @@ impl Tailer {
                         }
                     }
 
-                    if !events.is_empty() {
-                        request.transactions.push(EndpointTransaction {
+                    for write in &transaction.info.changes {
+                        match write {
+                            WriteSetChange::DeleteTableItem(item) => {
+                                let handle = item.handle.to_string();
+                                if self.handles.contains(&handle) {
+                                    changes.push(EndpointTableChange {
+                                        handle,
+                                        key: item.data.as_ref().unwrap().key.clone(),
+                                        value: None
+                                    });
+                                }
+                            }
+                            WriteSetChange::WriteTableItem(item) => {
+                                let handle = item.handle.to_string();
+                                if self.handles.contains(&handle) {
+                                    let data = item.data.as_ref().unwrap();
+                                    changes.push(EndpointTableChange {
+                                        handle,
+                                        key: data.key.clone(),
+                                        value: Some(data.value.clone())
+                                    });
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+
+                    if !events.is_empty() || !changes.is_empty() {
+                        transactions.push(EndpointTransaction {
                             version: transaction.info.version.0,
                             timestamp: transaction.timestamp.0,
-                            events
+                            events,
+                            changes
                         });
                     }
                 }
             }
-        }
-
-        /*let results = self
-            .processor
-            .process_transactions_with_status(transactions)
-            .await;*/
-
-        if !request.transactions.is_empty() {
-            //TODO handle errors
-            self.client.post(&self.endpoint).json(&request).send().await;
         }
 
         let batch_millis = (chrono::Utc::now().naive_utc() - batch_start).num_milliseconds();
@@ -155,11 +148,11 @@ impl Tailer {
             "Finished processing of transaction batch"
         );
 
-        (num_txns, Some(Result::Ok(ProcessingResult {
-            name: "",
+        (num_txns, Some(ProcessingResult {
+            transactions,
             start_version: start_version.unwrap(),
             end_version: end_version.unwrap()
-        })))
+        }))
     }
 }
 

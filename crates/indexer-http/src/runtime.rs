@@ -15,13 +15,15 @@ use aptos_types::chain_id::ChainId;
 use serde::{Serialize, Deserialize};
 use std::{collections::VecDeque, sync::Arc};
 use tokio::runtime::{Builder, Runtime};
+use crate::indexer::processing_result::{EndpointTransaction, EndpointRequest};
 
 const ENDPOINT: &str = "http://127.0.0.1:34789/aptos";
 
 #[derive(Deserialize)]
 struct HandshakeResponse {
     pub version: u64,
-    pub events: Vec<String>
+    pub events: Vec<String>,
+    pub handles: Vec<String>
 }
 
 pub struct MovingAverage {
@@ -122,7 +124,9 @@ pub async fn run_forever(config: IndexerConfig, context: Arc<Context>) {
     let options =
         TransactionFetcherOptions::new(None, None, Some(batch_size), None, fetch_tasks as usize);
 
-    let response = match reqwest::get(ENDPOINT).await {
+    let client = reqwest::Client::new();
+
+    let response = match client.get(ENDPOINT).send().await {
         Ok(res) => res,
         Err(err) => panic!("Could not reach handshake endpoint: {:?}", err),
     };
@@ -132,7 +136,7 @@ pub async fn run_forever(config: IndexerConfig, context: Arc<Context>) {
         Err(err) => panic!("Could not parse handshake response: {:?}", err),
     };
 
-    let tailer = Tailer::new(context, ENDPOINT.to_string(), handshake.events, options)
+    let tailer = Tailer::new(context, handshake.events, handshake.handles, options)
         .expect("Failed to instantiate tailer");
 
     let start_version = handshake.version;
@@ -171,34 +175,28 @@ pub async fn run_forever(config: IndexerConfig, context: Arc<Context>) {
             Err(err) => panic!("Error processing transaction batches: {:?}", err),
         };
 
+        let mut transactions: Vec<EndpointTransaction> = vec![];
+
         let mut batch_start_version = u64::MAX;
         let mut batch_end_version = 0;
         let mut num_res = 0;
 
         for (num_txn, res) in batches {
-            let processed_result: ProcessingResult = match res {
-                // When the batch is empty b/c we're caught up, continue to next batch
-                None => continue,
-                Some(Ok(res)) => res,
-                Some(Err(tpe)) => {
-                    let (err, start_version, end_version, _) = tpe.inner();
-                    error!(
-                        processor_name = processor_name,
-                        start_version = start_version,
-                        end_version = end_version,
-                        error =? err,
-                        "Error processing batch!"
-                    );
-                    panic!(
-                        "Error in '{}' while processing batch: {:?}",
-                        processor_name, err
-                    );
-                },
+            if let Some(processed_result) = res {
+                batch_start_version =
+                    std::cmp::min(batch_start_version, processed_result.start_version);
+                batch_end_version = std::cmp::max(batch_end_version, processed_result.end_version);
+                num_res += num_txn;
+                transactions.extend(processed_result.transactions);
             };
-            batch_start_version =
-                std::cmp::min(batch_start_version, processed_result.start_version);
-            batch_end_version = std::cmp::max(batch_end_version, processed_result.end_version);
-            num_res += num_txn;
+        }
+
+        if !transactions.is_empty() {
+            transactions.sort_by(|a, b| a.version.cmp(&b.version));
+            let request = EndpointRequest { transactions };
+            if let Err(err) = client.post(ENDPOINT).json(&request).send().await {
+                panic!("Could not reach endpoint: {:?}", err);
+            }
         }
 
         ma.tick_now(num_res);

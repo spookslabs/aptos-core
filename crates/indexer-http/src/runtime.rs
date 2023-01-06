@@ -3,7 +3,7 @@
 
 use crate::{
     indexer::{
-        fetcher::TransactionFetcherOptions, processing_result::ProcessingResult, tailer::Tailer
+        fetcher::TransactionFetcherOptions, processing_result::{EndpointTransaction, EndpointRequest}, tailer::Tailer
     }
 };
 use aptos_api::context::Context;
@@ -15,7 +15,6 @@ use aptos_types::chain_id::ChainId;
 use serde::{Serialize, Deserialize};
 use std::{collections::VecDeque, sync::Arc};
 use tokio::runtime::{Builder, Runtime};
-use crate::indexer::processing_result::{EndpointTransaction, EndpointRequest};
 
 const ENDPOINT: &str = "http://127.0.0.1:34789/aptos";
 
@@ -109,13 +108,10 @@ pub fn bootstrap(
 pub async fn run_forever(config: IndexerConfig, context: Arc<Context>) {
     // All of these options should be filled already with defaults
     let processor_name = config.processor.clone().unwrap();
-    let check_chain_id = config.check_chain_id.unwrap();
-    let skip_migrations = config.skip_migrations.unwrap();
     let fetch_tasks = config.fetch_tasks.unwrap();
     let processor_tasks = config.processor_tasks.unwrap();
     let emit_every = config.emit_every.unwrap();
     let batch_size = config.batch_size.unwrap();
-    let lookback_versions = config.gap_lookback_versions.unwrap() as i64;
 
     info!(processor_name = processor_name, "Starting indexer...");
 
@@ -192,6 +188,12 @@ pub async fn run_forever(config: IndexerConfig, context: Arc<Context>) {
         }
 
         if !transactions.is_empty() {
+
+            info!(
+                versions = transactions.iter().map(|transaction| transaction.version).collect::<Vec<u64>>(),
+                "Sending transactions to endpoint"
+            );
+
             transactions.sort_by(|a, b| a.version.cmp(&b.version));
             let request = EndpointRequest { transactions };
             if let Err(err) = client.post(ENDPOINT).json(&request).send().await {

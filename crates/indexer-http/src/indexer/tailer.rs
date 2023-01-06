@@ -109,26 +109,28 @@ impl Tailer {
 
         for transaction in &transactions {
             if let Transaction::UserTransaction(transaction) = transaction {
+                if transaction.info.success {
 
-                let mut events = vec![];
-                
-                for event in &transaction.events {
-                    let typ = event.typ.to_string();
-                    if self.events.contains(&typ) {
-                        events.push(EndpointEvent {
-                            address: event.guid.account_address.to_string(),
-                            typ,
-                            data: event.data.clone()
+                    let mut events = vec![];
+
+                    for event in &transaction.events {
+                        let typ = event.typ.to_string();
+                        if self.events.contains(&typ) {
+                            events.push(EndpointEvent {
+                                address: event.guid.account_address.to_string(),
+                                typ,
+                                data: event.data.clone()
+                            });
+                        }
+                    }
+
+                    if !events.is_empty() {
+                        request.transactions.push(EndpointTransaction {
+                            version: transaction.info.version.0,
+                            timestamp: transaction.timestamp.0,
+                            events
                         });
                     }
-                }
-
-                if !events.is_empty() {
-                    request.transactions.push(EndpointTransaction {
-                        version: transaction.info.version.0,
-                        timestamp: transaction.timestamp.0,
-                        events
-                    });
                 }
             }
         }

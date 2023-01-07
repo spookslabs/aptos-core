@@ -14,12 +14,13 @@ use chrono::ParseError;
 use std::{fmt::Debug, sync::Arc};
 use tokio::{sync::Mutex, task::JoinHandle};
 use aptos_api_types::{Transaction, WriteSetChange};
-use crate::indexer::processing_result::{EndpointTableChange, EndpointTransaction, EndpointEvent};
+use crate::indexer::processing_result::{EndpointTableChange, EndpointTransaction, EndpointEvent, EndpointResourceChange};
 
 #[derive(Clone)]
 pub struct Tailer {
     pub transaction_fetcher: Arc<Mutex<dyn TransactionFetcherTrait>>,
     events: Vec<String>,
+    resources: Vec<String>,
     handles: Vec<String>
 }
 
@@ -27,6 +28,7 @@ impl Tailer {
     pub fn new(
         context: Arc<ApiContext>,
         events: Vec<String>,
+        resources: Vec<String>,
         handles: Vec<String>,
         options: TransactionFetcherOptions,
     ) -> Result<Tailer, ParseError> {
@@ -36,6 +38,7 @@ impl Tailer {
         Ok(Self {
             transaction_fetcher: Arc::new(Mutex::new(transaction_fetcher)),
             events,
+            resources,
             handles
         })
     }
@@ -86,6 +89,7 @@ impl Tailer {
                 if transaction.info.success {
 
                     let mut events = vec![];
+                    let mut resources = vec![];
                     let mut changes = vec![];
 
                     for event in &transaction.events {
@@ -111,6 +115,16 @@ impl Tailer {
                                     });
                                 }
                             }
+                            WriteSetChange::DeleteResource(resource) => {
+                                let typ = resource.resource.to_string();
+                                if self.resources.contains(&typ) {
+                                    resources.push(EndpointResourceChange {
+                                        address: resource.address.to_string(),
+                                        typ,
+                                        data: None
+                                    });
+                                }
+                            }
                             WriteSetChange::WriteTableItem(item) => {
                                 let handle = item.handle.to_string();
                                 if self.handles.contains(&handle) {
@@ -122,15 +136,26 @@ impl Tailer {
                                     });
                                 }
                             }
+                            WriteSetChange::WriteResource(resource) => {
+                                let typ = resource.data.typ.to_string();
+                                if self.resources.contains(&typ) {
+                                    resources.push(EndpointResourceChange {
+                                        address: resource.address.to_string(),
+                                        typ,
+                                        data: Some(resource.data.data.clone())
+                                    });
+                                }
+                            }
                             _ => {}
                         }
                     }
 
-                    if !events.is_empty() || !changes.is_empty() {
+                    if !events.is_empty() || !resources.is_empty() || !changes.is_empty() {
                         transactions.push(EndpointTransaction {
                             version: transaction.info.version.0,
                             timestamp: transaction.timestamp.0,
                             events,
+                            resources,
                             changes
                         });
                     }

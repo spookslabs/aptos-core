@@ -22,6 +22,7 @@ const ENDPOINT: &str = "http://127.0.0.1:34789/aptos";
 struct HandshakeResponse {
     pub version: u64,
     pub events: Vec<String>,
+    pub resources: Vec<String>,
     pub handles: Vec<String>
 }
 
@@ -132,7 +133,7 @@ pub async fn run_forever(config: IndexerConfig, context: Arc<Context>) {
         Err(err) => panic!("Could not parse handshake response: {:?}", err),
     };
 
-    let tailer = Tailer::new(context, handshake.events, handshake.handles, options)
+    let tailer = Tailer::new(context, handshake.events, handshake.resources, handshake.handles, options)
         .expect("Failed to instantiate tailer");
 
     let start_version = handshake.version;

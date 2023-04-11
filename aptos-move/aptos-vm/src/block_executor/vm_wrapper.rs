@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -23,7 +24,7 @@ pub(crate) struct AptosExecutorTask<'a, S> {
     base_view: &'a S,
 }
 
-impl<'a, S: 'a + StateView> ExecutorTask for AptosExecutorTask<'a, S> {
+impl<'a, S: 'a + StateView + Sync> ExecutorTask for AptosExecutorTask<'a, S> {
     type Argument = &'a S;
     type Error = VMStatus;
     type Output = AptosTransactionOutput;

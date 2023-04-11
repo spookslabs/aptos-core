@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{anyhow, format_err, Result};
@@ -7,7 +8,7 @@ use aptos_types::{
     access_path::AccessPath,
     account_address::AccountAddress,
     account_config::{NewBlockEvent, CORE_CODE_ADDRESS},
-    contract_event::EventWithVersion,
+    contract_event::{ContractEvent, EventWithVersion},
     epoch_change::EpochChangeProof,
     epoch_state::EpochState,
     event::EventKey,
@@ -16,7 +17,7 @@ use aptos_types::{
     on_chain_config::{access_path_for_config, ConfigID},
     proof::{
         AccumulatorConsistencyProof, SparseMerkleProof, SparseMerkleProofExt,
-        SparseMerkleRangeProof, TransactionAccumulatorSummary,
+        SparseMerkleRangeProof, TransactionAccumulatorRangeProof, TransactionAccumulatorSummary,
     },
     state_proof::StateProof,
     state_store::{
@@ -27,9 +28,10 @@ use aptos_types::{
         table::{TableHandle, TableInfo},
     },
     transaction::{
-        AccountTransactionsWithProof, TransactionInfo, TransactionListWithProof,
+        AccountTransactionsWithProof, Transaction, TransactionInfo, TransactionListWithProof,
         TransactionOutputListWithProof, TransactionToCommit, TransactionWithProof, Version,
     },
+    write_set::WriteSet,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
@@ -202,6 +204,47 @@ pub trait DbReader: Send + Sync {
         limit: u64,
         ledger_version: Version,
     ) -> Result<Vec<EventWithVersion>> {
+        unimplemented!()
+    }
+
+    fn get_transaction_iterator(
+        &self,
+        start_version: Version,
+        limit: u64,
+    ) -> Result<Box<dyn Iterator<Item = Result<Transaction>> + '_>> {
+        unimplemented!()
+    }
+
+    fn get_transaction_info_iterator(
+        &self,
+        start_version: Version,
+        limit: u64,
+    ) -> Result<Box<dyn Iterator<Item = Result<TransactionInfo>> + '_>> {
+        unimplemented!()
+    }
+
+    fn get_events_iterator(
+        &self,
+        start_version: Version,
+        limit: u64,
+    ) -> Result<Box<dyn Iterator<Item = Result<Vec<ContractEvent>>> + '_>> {
+        unimplemented!()
+    }
+
+    fn get_write_set_iterator(
+        &self,
+        start_version: Version,
+        limit: u64,
+    ) -> Result<Box<dyn Iterator<Item = Result<WriteSet>> + '_>> {
+        unimplemented!()
+    }
+
+    fn get_transaction_accumulator_range_proof(
+        &self,
+        start_version: Version,
+        limit: u64,
+        ledger_version: Version,
+    ) -> Result<TransactionAccumulatorRangeProof> {
         unimplemented!()
     }
 
@@ -398,7 +441,7 @@ pub trait DbReader: Send + Sync {
 
     /// Gets the latest transaction info.
     /// N.B. Unlike get_startup_info(), even if the db is not bootstrapped, this can return `Some`
-    /// -- those from a db-restore run.
+    /// -- those from a aptos db-tool restore run.
     fn get_latest_transaction_info_option(&self) -> Result<Option<(Version, TransactionInfo)>> {
         unimplemented!()
     }
@@ -500,7 +543,7 @@ impl MoveStorage for &dyn DbReader {
         version: Version,
     ) -> Result<Vec<u8>> {
         let state_value =
-            self.get_state_value_by_version(&StateKey::AccessPath(access_path), version)?;
+            self.get_state_value_by_version(&StateKey::access_path(access_path), version)?;
 
         state_value
             .ok_or_else(|| format_err!("no value found in DB"))
@@ -509,9 +552,9 @@ impl MoveStorage for &dyn DbReader {
 
     fn fetch_config_by_version(&self, config_id: ConfigID, version: Version) -> Result<Vec<u8>> {
         let config_value_option = self.get_state_value_by_version(
-            &StateKey::AccessPath(AccessPath::new(
+            &StateKey::access_path(AccessPath::new(
                 CORE_CODE_ADDRESS,
-                access_path_for_config(config_id).path,
+                access_path_for_config(config_id)?.path,
             )),
             version,
         )?;

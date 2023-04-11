@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::{Error, RootPath};
@@ -105,7 +106,7 @@ impl ExecutionConfig {
                 self.genesis_file_location = PathBuf::from(GENESIS_DEFAULT);
             }
             let path = root_dir.full_path(&self.genesis_file_location);
-            let mut file = File::create(&path).map_err(|e| Error::IO("genesis".into(), e))?;
+            let mut file = File::create(path).map_err(|e| Error::IO("genesis".into(), e))?;
             let data = bcs::to_bytes(&genesis).map_err(|e| Error::BCS("genesis", e))?;
             file.write_all(&data)
                 .map_err(|e| Error::IO("genesis".into(), e))?;

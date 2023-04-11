@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 //! Tasks that are executed by coordinators (short-lived compared to coordinators)
@@ -27,7 +28,7 @@ use aptos_types::{
     mempool_status::{MempoolStatus, MempoolStatusCode},
     on_chain_config::{OnChainConfigPayload, OnChainConsensusConfig},
     transaction::SignedTransaction,
-    vm_status::DiscardedVMStatus,
+    vm_status::{DiscardedVMStatus, StatusCode},
 };
 use aptos_vm_validator::vm_validator::{get_account_sequence_number, TransactionValidation};
 use futures::{channel::oneshot, stream::FuturesUnordered};
@@ -241,7 +242,7 @@ pub(crate) fn update_ack_counter(
 }
 
 /// Submits a list of SignedTransaction to the local mempool
-/// and returns a vector containing AdmissionControlStatus.
+/// and returns a vector containing [SubmissionStatusBundle].
 pub(crate) fn process_incoming_transactions<NetworkClient, TransactionValidator>(
     smp: &SharedMempool<NetworkClient, TransactionValidator>,
     transactions: Vec<SignedTransaction>,
@@ -282,9 +283,9 @@ where
         .into_iter()
         .enumerate()
         .filter_map(|(idx, t)| {
-            if let Ok(sequence_info) = seq_numbers[idx] {
-                if t.sequence_number() >= sequence_info.min_seq() {
-                    return Some((t, sequence_info));
+            if let Ok(sequence_num) = seq_numbers[idx] {
+                if t.sequence_number() >= sequence_num {
+                    return Some((t, sequence_num));
                 } else {
                     statuses.push((
                         t,
@@ -308,6 +309,23 @@ where
         })
         .collect();
 
+    validate_and_add_transactions(transactions, smp, timeline_state, &mut statuses);
+    notify_subscribers(SharedMempoolNotification::NewTransactions, &smp.subscribers);
+    statuses
+}
+
+/// Perfoms VM validation on the transactions and inserts those that passes
+/// validation into the mempool.
+#[cfg(not(feature = "consensus-only-perf-test"))]
+fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
+    transactions: Vec<(SignedTransaction, u64)>,
+    smp: &SharedMempool<NetworkClient, TransactionValidator>,
+    timeline_state: TimelineState,
+    statuses: &mut Vec<(SignedTransaction, (MempoolStatus, Option<StatusCode>))>,
+) where
+    NetworkClient: NetworkClientInterface<MempoolSyncMsg>,
+    TransactionValidator: TransactionValidation,
+{
     // Track latency: VM validation
     let vm_validation_timer = counters::PROCESS_TXN_BREAKDOWN_LATENCY
         .with_label_values(&[counters::VM_VALIDATION_LABEL])
@@ -353,8 +371,30 @@ where
             }
         }
     }
-    notify_subscribers(SharedMempoolNotification::NewTransactions, &smp.subscribers);
-    statuses
+}
+
+/// In consensus-only mode, insert transactions into the mempool directly
+/// without any VM validation.
+///
+/// We want to populate transactions as fast as and
+/// as much as possible into the mempool, and the VM validator would interfere with
+/// this because validation has some overhead and the validator bounds the number of
+/// outstanding sequence numbers.
+#[cfg(feature = "consensus-only-perf-test")]
+fn validate_and_add_transactions<NetworkClient, TransactionValidator>(
+    transactions: Vec<(SignedTransaction, u64)>,
+    smp: &SharedMempool<NetworkClient, TransactionValidator>,
+    timeline_state: TimelineState,
+    statuses: &mut Vec<(SignedTransaction, (MempoolStatus, Option<StatusCode>))>,
+) where
+    NetworkClient: NetworkClientInterface<MempoolSyncMsg>,
+    TransactionValidator: TransactionValidation,
+{
+    let mut mempool = smp.mempool.lock();
+    for (transaction, sequence_info) in transactions.into_iter() {
+        let mempool_status = mempool.add_txn(transaction.clone(), 0, sequence_info, timeline_state);
+        statuses.push((transaction, (mempool_status, None)));
+    }
 }
 
 fn log_txn_process_results(results: &[SubmissionStatusBundle], sender: Option<PeerNetworkId>) {
@@ -404,7 +444,6 @@ pub(crate) fn process_quorum_store_request<NetworkClient, TransactionValidator>(
 {
     // Start latency timer
     let start_time = Instant::now();
-    debug!(LogSchema::event_log(LogEntry::QuorumStore, LogEvent::Received).quorum_store_msg(&req));
 
     let (resp, callback, counter_label) = match req {
         QuorumStoreRequest::GetBatchRequest(max_txns, max_bytes, transactions, callback) => {

@@ -4,7 +4,7 @@
 
 **DO NOT CREATE AN ISSUE** to report a security problem.
 
-Send an email to [security@aptosfoundation.org](mailto:security@aptosfoundation.org) and provide your GitHub username. The team will create a new draft security advisory for further discussion.
+Go to https://github.com/aptos-labs/aptos-core/security/advisories and open a vulnerability report. Send an email to [security@aptosfoundation.org](mailto:security@aptosfoundation.org) and provide your GitHub username. The team will traige the issue from there.
 
 For security reasons, DO NOT include attachments or provide detail sufficient for exploitation regarding the security issue in this email. Instead, wait for the advisory to be created, and **provide any sensitive details in the private GitHub advisory**.
 
@@ -48,7 +48,6 @@ Aptos Foundation considers the following levels of severity:
 **************** Critical — Up to $1,000,000 USD in APT tokens (locked for 12 months) ****************
 
 - Direct loss of funds to users or protocols with minimal preconditions, such as, Move type confusion.
-- Execute arbitrary system commands (RCE) on validator nodes.
 - Vulnerabilities in the Proof of Stake system which directly compromise consensus.
 - Unintended permanent chain split requiring hard fork (network partition requiring hardfork).
 - Permanent freezing, burning, or modification of funds (fix requires hardfork).

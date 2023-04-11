@@ -23,12 +23,18 @@ the Move stdlib, the Aptos stdlib, and the Aptos framework.
 -  [Function `multi_ed25519_pk_validate_v2_enabled`](#0x1_features_multi_ed25519_pk_validate_v2_enabled)
 -  [Function `get_blake2b_256_feature`](#0x1_features_get_blake2b_256_feature)
 -  [Function `blake2b_256_enabled`](#0x1_features_blake2b_256_enabled)
+-  [Function `get_resource_groups_feature`](#0x1_features_get_resource_groups_feature)
+-  [Function `resource_groups_enabled`](#0x1_features_resource_groups_enabled)
+-  [Function `get_multisig_accounts_feature`](#0x1_features_get_multisig_accounts_feature)
+-  [Function `multisig_accounts_enabled`](#0x1_features_multisig_accounts_enabled)
+-  [Function `get_delegation_pools_feature`](#0x1_features_get_delegation_pools_feature)
+-  [Function `delegation_pools_enabled`](#0x1_features_delegation_pools_enabled)
 -  [Function `change_feature_flags`](#0x1_features_change_feature_flags)
 -  [Function `is_enabled`](#0x1_features_is_enabled)
 -  [Function `set`](#0x1_features_set)
 -  [Function `contains`](#0x1_features_contains)
 -  [Specification](#@Specification_1)
-    -  [Function `code_dependency_check_enabled`](#@Specification_1_code_dependency_check_enabled)
+    -  [Resource `Features`](#@Specification_1_Features)
     -  [Function `change_feature_flags`](#@Specification_1_change_feature_flags)
     -  [Function `is_enabled`](#@Specification_1_is_enabled)
     -  [Function `set`](#@Specification_1_set)
@@ -121,12 +127,33 @@ Lifetime: transient
 
 
 
+<a name="0x1_features_DELEGATION_POOLS"></a>
+
+Whether delegation pools are enabled.
+Lifetime: transient
+
+
+<pre><code><b>const</b> <a href="features.md#0x1_features_DELEGATION_POOLS">DELEGATION_POOLS</a>: u64 = 11;
+</code></pre>
+
+
+
 <a name="0x1_features_EFRAMEWORK_SIGNER_NEEDED"></a>
 
 The provided signer has not a framework address.
 
 
 <pre><code><b>const</b> <a href="features.md#0x1_features_EFRAMEWORK_SIGNER_NEEDED">EFRAMEWORK_SIGNER_NEEDED</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="0x1_features_MULTISIG_ACCOUNTS"></a>
+
+Whether multisig accounts (different from accounts with multi-ed25519 auth keys) are enabled.
+
+
+<pre><code><b>const</b> <a href="features.md#0x1_features_MULTISIG_ACCOUNTS">MULTISIG_ACCOUNTS</a>: u64 = 10;
 </code></pre>
 
 
@@ -139,6 +166,17 @@ Lifetime: transient
 
 
 <pre><code><b>const</b> <a href="features.md#0x1_features_MULTI_ED25519_PK_VALIDATE_V2_NATIVES">MULTI_ED25519_PK_VALIDATE_V2_NATIVES</a>: u64 = 7;
+</code></pre>
+
+
+
+<a name="0x1_features_RESOURCE_GROUPS"></a>
+
+Whether resource groups are enabled.
+This is needed because of new attributes for structs and a change in storage representation.
+
+
+<pre><code><b>const</b> <a href="features.md#0x1_features_RESOURCE_GROUPS">RESOURCE_GROUPS</a>: u64 = 9;
 </code></pre>
 
 
@@ -502,6 +540,144 @@ Lifetime: transient
 
 </details>
 
+<a name="0x1_features_get_resource_groups_feature"></a>
+
+## Function `get_resource_groups_feature`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_get_resource_groups_feature">get_resource_groups_feature</a>(): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_get_resource_groups_feature">get_resource_groups_feature</a>(): u64 { <a href="features.md#0x1_features_RESOURCE_GROUPS">RESOURCE_GROUPS</a> }
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_features_resource_groups_enabled"></a>
+
+## Function `resource_groups_enabled`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_resource_groups_enabled">resource_groups_enabled</a>(): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_resource_groups_enabled">resource_groups_enabled</a>(): bool <b>acquires</b> <a href="features.md#0x1_features_Features">Features</a> {
+    <a href="features.md#0x1_features_is_enabled">is_enabled</a>(<a href="features.md#0x1_features_RESOURCE_GROUPS">RESOURCE_GROUPS</a>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_features_get_multisig_accounts_feature"></a>
+
+## Function `get_multisig_accounts_feature`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_get_multisig_accounts_feature">get_multisig_accounts_feature</a>(): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_get_multisig_accounts_feature">get_multisig_accounts_feature</a>(): u64 { <a href="features.md#0x1_features_MULTISIG_ACCOUNTS">MULTISIG_ACCOUNTS</a> }
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_features_multisig_accounts_enabled"></a>
+
+## Function `multisig_accounts_enabled`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_multisig_accounts_enabled">multisig_accounts_enabled</a>(): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_multisig_accounts_enabled">multisig_accounts_enabled</a>(): bool <b>acquires</b> <a href="features.md#0x1_features_Features">Features</a> {
+    <a href="features.md#0x1_features_is_enabled">is_enabled</a>(<a href="features.md#0x1_features_MULTISIG_ACCOUNTS">MULTISIG_ACCOUNTS</a>)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_features_get_delegation_pools_feature"></a>
+
+## Function `get_delegation_pools_feature`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_get_delegation_pools_feature">get_delegation_pools_feature</a>(): u64
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_get_delegation_pools_feature">get_delegation_pools_feature</a>(): u64 { <a href="features.md#0x1_features_DELEGATION_POOLS">DELEGATION_POOLS</a> }
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_features_delegation_pools_enabled"></a>
+
+## Function `delegation_pools_enabled`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_delegation_pools_enabled">delegation_pools_enabled</a>(): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_delegation_pools_enabled">delegation_pools_enabled</a>(): bool <b>acquires</b> <a href="features.md#0x1_features_Features">Features</a> {
+    <a href="features.md#0x1_features_is_enabled">is_enabled</a>(<a href="features.md#0x1_features_DELEGATION_POOLS">DELEGATION_POOLS</a>)
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x1_features_change_feature_flags"></a>
 
 ## Function `change_feature_flags`
@@ -636,24 +812,28 @@ Helper to check whether a feature flag is enabled.
 ## Specification
 
 
+<a name="@Specification_1_Features"></a>
 
-<pre><code><b>pragma</b> verify = <b>false</b>;
+### Resource `Features`
+
+
+<pre><code><b>struct</b> <a href="features.md#0x1_features_Features">Features</a> <b>has</b> key
 </code></pre>
 
 
 
-<a name="@Specification_1_code_dependency_check_enabled"></a>
+<dl>
+<dt>
+<code><a href="features.md#0x1_features">features</a>: <a href="vector.md#0x1_vector">vector</a>&lt;u8&gt;</code>
+</dt>
+<dd>
 
-### Function `code_dependency_check_enabled`
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="features.md#0x1_features_code_dependency_check_enabled">code_dependency_check_enabled</a>(): bool
-</code></pre>
+</dd>
+</dl>
 
 
 
-
-<pre><code><b>pragma</b> opaque = <b>true</b>;
+<pre><code><b>pragma</b> bv=b"0";
 </code></pre>
 
 
@@ -669,8 +849,9 @@ Helper to check whether a feature flag is enabled.
 
 
 
-<pre><code><b>pragma</b> opaque = <b>true</b>;
+<pre><code><b>pragma</b> opaque;
 <b>modifies</b> <b>global</b>&lt;<a href="features.md#0x1_features_Features">Features</a>&gt;(@std);
+<b>aborts_if</b> <a href="signer.md#0x1_signer_address_of">signer::address_of</a>(framework) != @std;
 </code></pre>
 
 
@@ -713,7 +894,10 @@ Helper to check whether a feature flag is enabled.
 
 
 
-<pre><code><b>pragma</b> opaque;
+<pre><code><b>pragma</b> bv=b"0";
+<b>aborts_if</b> <b>false</b>;
+<b>ensures</b> feature / 8 &lt; len(<a href="features.md#0x1_features">features</a>);
+<b>ensures</b> <b>include</b> == <a href="features.md#0x1_features_spec_contains">spec_contains</a>(<a href="features.md#0x1_features">features</a>, feature);
 </code></pre>
 
 
@@ -729,7 +913,21 @@ Helper to check whether a feature flag is enabled.
 
 
 
-<pre><code><b>pragma</b> opaque;
+<pre><code><b>pragma</b> bv=b"0";
+<b>aborts_if</b> <b>false</b>;
+<b>ensures</b> result == <a href="features.md#0x1_features_spec_contains">spec_contains</a>(<a href="features.md#0x1_features">features</a>, feature);
+</code></pre>
+
+
+
+
+<a name="0x1_features_spec_contains"></a>
+
+
+<pre><code><b>fun</b> <a href="features.md#0x1_features_spec_contains">spec_contains</a>(<a href="features.md#0x1_features">features</a>: <a href="vector.md#0x1_vector">vector</a>&lt;u8&gt;, feature: u64): bool {
+   ((int2bv((((1 <b>as</b> u8) &lt;&lt; ((feature % (8 <b>as</b> u64)) <b>as</b> u64)) <b>as</b> u8)) <b>as</b> u8) & <a href="features.md#0x1_features">features</a>[feature/8] <b>as</b> u8) &gt; (0 <b>as</b> u8)
+       && (feature / 8) &lt; len(<a href="features.md#0x1_features">features</a>)
+}
 </code></pre>
 
 

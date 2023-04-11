@@ -1,4 +1,4 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -40,7 +40,7 @@ impl ExecutedTrees {
     }
 
     pub fn num_transactions(&self) -> u64 {
-        self.txn_accumulator().num_leaves() as u64
+        self.txn_accumulator().num_leaves()
     }
 
     pub fn state_id(&self) -> HashValue {

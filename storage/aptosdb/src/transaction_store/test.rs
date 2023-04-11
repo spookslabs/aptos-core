@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
@@ -106,7 +107,7 @@ proptest! {
                 actual,
                 txns
                     .into_iter()
-                    .take(total_num_txns as usize - 1)
+                    .take(total_num_txns - 1)
                     .collect::<Vec<_>>()
             );
         }

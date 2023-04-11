@@ -1,4 +1,4 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -58,7 +58,7 @@ impl K8sSwarm {
                     info!("{:?}", delete_networkchaos);
                     let delete_networkchaos_output = Command::new(KUBECTL_BIN)
                         .stdout(Stdio::inherit())
-                        .args(&delete_networkchaos)
+                        .args(delete_networkchaos)
                         .output()
                         .expect("failed to delete all NetworkChaos");
                     if !delete_networkchaos_output.status.success() {

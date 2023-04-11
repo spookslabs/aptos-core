@@ -1,13 +1,10 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 //! Interface between Consensus and Network layers.
 
-use crate::{
-    counters,
-    quorum_store::types::{Batch, BatchRequest, Fragment},
-};
-use aptos_channels::{aptos_channel, message_queues::QueueStyle};
+use crate::quorum_store::types::{Batch, BatchRequest, Fragment};
 use aptos_config::network_id::{NetworkId, PeerNetworkId};
 use aptos_consensus_types::{
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse},
@@ -20,8 +17,6 @@ use aptos_consensus_types::{
 };
 use aptos_network::{
     application::{error::Error, interface::NetworkClientInterface},
-    constants::NETWORK_CHANNEL_SIZE,
-    protocols::network::NetworkApplicationConfig,
     ProtocolId,
 };
 use aptos_types::{epoch_change::EpochChangeProof, PeerId};
@@ -120,18 +115,6 @@ pub const DIRECT_SEND: &[ProtocolId] = &[
     ProtocolId::ConsensusDirectSendBcs,
     ProtocolId::ConsensusDirectSendJson,
 ];
-
-/// TODO: make this configurable
-/// Returns a network application config for the consensus client and service
-pub fn consensus_network_config() -> NetworkApplicationConfig {
-    let protos = RPC.iter().chain(DIRECT_SEND.iter()).copied();
-    NetworkApplicationConfig::client_and_service(
-        protos,
-        aptos_channel::Config::new(NETWORK_CHANNEL_SIZE)
-            .queue_style(QueueStyle::FIFO)
-            .counters(&counters::PENDING_CONSENSUS_NETWORK_EVENTS),
-    )
-}
 
 impl<NetworkClient: NetworkClientInterface<ConsensusMsg>> ConsensusNetworkClient<NetworkClient> {
     /// Returns a new consensus network client

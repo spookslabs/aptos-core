@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 #![forbid(unsafe_code)]
@@ -296,9 +297,9 @@ mod tests {
     fn test_files() {
         let path = "data.txt";
         let value1 = "hello";
-        let value1_encoded = base64::encode(&value1);
+        let value1_encoded = base64::encode(value1);
         let value2 = "world";
-        let value2_encoded = base64::encode(&value2);
+        let value2_encoded = base64::encode(value2);
 
         let github = Client::new(OWNER.into(), REPOSITORY.into(), BRANCH.into(), TOKEN.into());
 
@@ -326,12 +327,12 @@ mod tests {
         let path1_root = "dir";
         let path1 = "dir/data1.txt";
         let value1 = "hello";
-        let value1_encoded = base64::encode(&value1);
+        let value1_encoded = base64::encode(value1);
 
         let path2_root = "dir1";
         let path2 = "dir1/data1.txt";
         let value2 = "world";
-        let value2_encoded = base64::encode(&value2);
+        let value2_encoded = base64::encode(value2);
 
         let github = Client::new(OWNER.into(), REPOSITORY.into(), BRANCH.into(), TOKEN.into());
 
@@ -370,7 +371,7 @@ mod tests {
         let file0 = "root_dir/another_dir/another_dir/ok.txt";
         let file1 = "root_dir/another_dir/ok.txt";
         let value = "hello";
-        let value_encoded = base64::encode(&value);
+        let value_encoded = base64::encode(value);
 
         let github = Client::new(OWNER.into(), REPOSITORY.into(), BRANCH.into(), TOKEN.into());
 

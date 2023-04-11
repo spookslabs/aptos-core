@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -106,16 +107,14 @@ impl MockStorage {
             .block
             .lock()
             .clone()
-            .into_iter()
-            .map(|(_, v)| v)
+            .into_values()
             .collect();
         let quorum_certs = self
             .shared_storage
             .qc
             .lock()
             .clone()
-            .into_iter()
-            .map(|(_, v)| v)
+            .into_values()
             .collect();
         blocks.sort_by_key(Block::round);
         let last_vote = self.shared_storage.last_vote.lock().clone();

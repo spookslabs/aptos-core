@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -55,7 +56,10 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use tokio::time::{sleep, Instant};
+use tokio::{
+    sync::oneshot as TokioOneshot,
+    time::{sleep, Instant},
+};
 
 #[derive(Serialize, Clone)]
 pub enum UnverifiedEvent {
@@ -79,28 +83,40 @@ impl UnverifiedEvent {
         peer_id: PeerId,
         validator: &ValidatorVerifier,
         quorum_store_enabled: bool,
+        self_message: bool,
     ) -> Result<VerifiedEvent, VerifyError> {
         Ok(match self {
+            //TODO: no need to sign and verify the proposal
             UnverifiedEvent::ProposalMsg(p) => {
-                p.verify(validator, quorum_store_enabled)?;
+                if !self_message {
+                    p.verify(validator, quorum_store_enabled)?;
+                }
                 VerifiedEvent::ProposalMsg(p)
             },
             UnverifiedEvent::VoteMsg(v) => {
-                v.verify(validator)?;
+                if !self_message {
+                    v.verify(validator)?;
+                }
                 VerifiedEvent::VoteMsg(v)
             },
             // sync info verification is on-demand (verified when it's used)
             UnverifiedEvent::SyncInfo(s) => VerifiedEvent::UnverifiedSyncInfo(s),
             UnverifiedEvent::CommitVote(cv) => {
-                cv.verify(validator)?;
+                if !self_message {
+                    cv.verify(validator)?;
+                }
                 VerifiedEvent::CommitVote(cv)
             },
             UnverifiedEvent::CommitDecision(cd) => {
-                cd.verify(validator)?;
+                if !self_message {
+                    cd.verify(validator)?;
+                }
                 VerifiedEvent::CommitDecision(cd)
             },
             UnverifiedEvent::FragmentMsg(f) => {
-                f.verify(peer_id)?;
+                if !self_message {
+                    f.verify(peer_id)?;
+                }
                 VerifiedEvent::FragmentMsg(f)
             },
             UnverifiedEvent::BatchRequestMsg(br) => {
@@ -113,11 +129,15 @@ impl UnverifiedEvent {
                 VerifiedEvent::UnverifiedBatchMsg(b)
             },
             UnverifiedEvent::SignedDigestMsg(sd) => {
-                sd.verify(validator)?;
+                if !self_message {
+                    sd.verify(validator)?;
+                }
                 VerifiedEvent::SignedDigestMsg(sd)
             },
             UnverifiedEvent::ProofOfStoreMsg(p) => {
-                p.verify(validator)?;
+                if !self_message {
+                    p.verify(validator)?;
+                }
                 VerifiedEvent::ProofOfStoreMsg(p)
             },
         })
@@ -173,6 +193,8 @@ pub enum VerifiedEvent {
     ProofOfStoreMsg(Box<ProofOfStore>),
     // local messages
     LocalTimeout(Round),
+    // Shutdown the NetworkListener
+    Shutdown(TokioOneshot::Sender<()>),
 }
 
 #[cfg(test)]
@@ -684,14 +706,25 @@ impl RoundManager {
         observe_block(proposal.timestamp_usecs(), BlockStage::SYNCED);
         if self.decoupled_execution() && self.block_store.back_pressure() {
             // In case of back pressure, we delay processing proposal. This is done by resending the
-            // same proposal to self after some time.
-            Ok(self
-                .resend_verified_proposal_to_self(
-                    proposal,
-                    BACK_PRESSURE_POLLING_INTERVAL_MS,
-                    self.local_config.round_initial_timeout_ms,
-                )
-                .await)
+            // same proposal to self after some time. Even if processing proposal is delayed, we add
+            // the block to the block store so that we don't need to fetch it from remote once we
+            // are out of the backpressure. Please note that delayed processing of proposal is not
+            // guaranteed to add the block to the block store if we don't get out of the backpressure
+            // before the timeout, so this is needed to ensure that the proposed block is added to
+            // the block store irrespective. Also, it is possible that delayed processing of proposal
+            // tries to add the same block again, which is okay as `execute_and_insert_block` call
+            // is idempotent.
+            self.block_store
+                .execute_and_insert_block(proposal.clone())
+                .await
+                .context("[RoundManager] Failed to execute_and_insert the block")?;
+            self.resend_verified_proposal_to_self(
+                proposal,
+                BACK_PRESSURE_POLLING_INTERVAL_MS,
+                self.local_config.round_initial_timeout_ms,
+            )
+            .await;
+            Ok(())
         } else {
             self.process_verified_proposal(proposal).await
         }
@@ -917,7 +950,7 @@ impl RoundManager {
             self.round_state.record_vote(vote);
         }
         if let Err(e) = self.process_new_round_event(new_round_event).await {
-            error!(error = ?e, "[RoundManager] Error during start");
+            warn!(error = ?e, "[RoundManager] Error during start");
         }
     }
 

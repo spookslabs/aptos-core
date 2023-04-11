@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 // README: The aptos-faucet is deprecated in favor of the tap. Do not add new code
@@ -23,7 +24,7 @@ static MINTER_SCRIPT: &[u8] = include_bytes!("minter.mv");
 
 pub fn mint_routes(
     service: Arc<Service>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
     // POST /?amount=25&address=xxx
     // POST /mint?amount=25&address=xxx
     warp::path::end()

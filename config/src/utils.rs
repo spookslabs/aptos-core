@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::config::NodeConfig;
@@ -59,7 +60,7 @@ impl PortCounterFiles {
 
 impl Drop for PortCounterFiles {
     fn drop(&mut self) {
-        fs::remove_file(&lock_path()).unwrap();
+        fs::remove_file(lock_path()).unwrap();
     }
 }
 
@@ -157,13 +158,13 @@ fn open_counter_file() -> PortCounterFiles {
             .read(true)
             .write(true)
             .create_new(true)
-            .open(&lock_path())
+            .open(lock_path())
         {
             Ok(lock_file) => match OpenOptions::new()
                 .read(true)
                 .write(true)
                 .create(true)
-                .open(&counter_path())
+                .open(counter_path())
             {
                 Ok(counter_file) => return PortCounterFiles::new(counter_file, lock_file),
                 Err(_) => {

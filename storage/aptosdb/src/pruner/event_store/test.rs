@@ -1,4 +1,4 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{AptosDB, EventStore, LedgerPrunerManager, PrunerManager};
@@ -188,7 +188,7 @@ fn verify_events_in_store(
     version: Version,
     event_store: &Arc<EventStore>,
 ) {
-    let events_from_db = event_store.get_events_by_version(version as u64).unwrap();
+    let events_from_db = event_store.get_events_by_version(version).unwrap();
     assert_eq!(
         events_from_db.len(),
         events.get(version as usize).unwrap().len()

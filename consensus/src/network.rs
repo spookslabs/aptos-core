@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -7,10 +8,11 @@ use crate::{
     logging::LogEvent,
     monitor,
     network_interface::{ConsensusMsg, ConsensusNetworkClient},
-    quorum_store::types::{Batch, Fragment},
+    quorum_store::types::{Batch, BatchRequest, Fragment},
 };
 use anyhow::{anyhow, ensure};
 use aptos_channels::{self, aptos_channel, message_queues::QueueStyle};
+use aptos_config::network_id::NetworkId;
 use aptos_consensus_types::{
     block_retrieval::{BlockRetrievalRequest, BlockRetrievalResponse, MAX_BLOCKS_PER_REQUEST},
     common::Author,
@@ -22,11 +24,8 @@ use aptos_consensus_types::{
 };
 use aptos_logger::prelude::*;
 use aptos_network::{
-    application::interface::NetworkClient,
-    protocols::{
-        network::{Event, NetworkEvents},
-        rpc::error::RpcError,
-    },
+    application::interface::{NetworkClient, NetworkServiceEvents},
+    protocols::{network::Event, rpc::error::RpcError},
     ProtocolId,
 };
 use aptos_types::{
@@ -35,7 +34,11 @@ use aptos_types::{
 };
 use bytes::Bytes;
 use fail::fail_point;
-use futures::{channel::oneshot, stream::select, SinkExt, Stream, StreamExt};
+use futures::{
+    channel::oneshot,
+    stream::{select, select_all},
+    SinkExt, Stream, StreamExt,
+};
 use std::{
     mem::{discriminant, Discriminant},
     time::Duration,
@@ -53,7 +56,7 @@ pub struct IncomingBlockRetrievalRequest {
 /// Just a convenience struct to keep all the network proxy receiving queues in one place.
 /// Will be returned by the NetworkTask upon startup.
 pub struct NetworkReceivers {
-    /// Provide a LIFO buffer for each (Author, MessageType) key
+    /// Provide a FIFO buffer for each (Author, MessageType) key
     pub consensus_messages: aptos_channel::Receiver<
         (AccountAddress, Discriminant<ConsensusMsg>),
         (AccountAddress, ConsensusMsg),
@@ -68,6 +71,8 @@ pub struct NetworkReceivers {
 
 #[async_trait::async_trait]
 pub(crate) trait QuorumStoreSender {
+    async fn send_batch_request(&self, request: BatchRequest, recipients: Vec<Author>);
+
     async fn send_batch(&self, batch: Batch, recipients: Vec<Author>);
 
     async fn send_signed_digest(&self, signed_digest: SignedDigest, recipients: Vec<Author>);
@@ -300,14 +305,20 @@ impl NetworkSender {
 
 #[async_trait::async_trait]
 impl QuorumStoreSender for NetworkSender {
+    async fn send_batch_request(&self, request: BatchRequest, recipients: Vec<Author>) {
+        fail_point!("consensus::send::batch_request", |_| ());
+        let msg = ConsensusMsg::BatchRequestMsg(Box::new(request));
+        self.send(msg, recipients).await
+    }
+
     async fn send_batch(&self, batch: Batch, recipients: Vec<Author>) {
-        fail_point!("consensus::send_batch", |_| ());
+        fail_point!("consensus::send::batch", |_| ());
         let msg = ConsensusMsg::BatchMsg(Box::new(batch));
         self.send(msg, recipients).await
     }
 
     async fn send_signed_digest(&self, signed_digest: SignedDigest, recipients: Vec<Author>) {
-        fail_point!("consensus::send_signed_digest", |_| ());
+        fail_point!("consensus::send::signed_digest", |_| ());
         let msg = ConsensusMsg::SignedDigestMsg(Box::new(signed_digest));
         self.send(msg, recipients).await
     }
@@ -342,11 +353,14 @@ pub struct NetworkTask {
 impl NetworkTask {
     /// Establishes the initial connections with the peers and returns the receivers.
     pub fn new(
-        network_events: NetworkEvents<ConsensusMsg>,
+        network_service_events: NetworkServiceEvents<ConsensusMsg>,
         self_receiver: aptos_channels::Receiver<Event<ConsensusMsg>>,
     ) -> (NetworkTask, NetworkReceivers) {
-        let (consensus_messages_tx, consensus_messages) =
-            aptos_channel::new(QueueStyle::LIFO, 1, Some(&counters::CONSENSUS_CHANNEL_MSGS));
+        let (consensus_messages_tx, consensus_messages) = aptos_channel::new(
+            QueueStyle::FIFO,
+            20,
+            Some(&counters::CONSENSUS_CHANNEL_MSGS),
+        );
         let (quorum_store_messages_tx, quorum_store_messages) = aptos_channel::new(
             QueueStyle::FIFO,
             // TODO: tune this value based on quorum store messages with backpressure
@@ -354,11 +368,24 @@ impl NetworkTask {
             Some(&counters::QUORUM_STORE_CHANNEL_MSGS),
         );
         let (block_retrieval_tx, block_retrieval) = aptos_channel::new(
-            QueueStyle::LIFO,
-            1,
+            QueueStyle::FIFO,
+            10,
             Some(&counters::BLOCK_RETRIEVAL_CHANNEL_MSGS),
         );
+
+        // Verify the network events have been constructed correctly
+        let network_and_events = network_service_events.into_network_and_events();
+        if (network_and_events.values().len() != 1)
+            || !network_and_events.contains_key(&NetworkId::Validator)
+        {
+            panic!("The network has not been setup correctly for consensus!");
+        }
+
+        // Collect all the network events into a single stream
+        let network_events: Vec<_> = network_and_events.into_values().collect();
+        let network_events = select_all(network_events).fuse();
         let all_events = Box::new(select(network_events, self_receiver));
+
         (
             NetworkTask {
                 consensus_messages_tx,

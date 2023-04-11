@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 // README: The aptos-faucet is deprecated in favor of the tap. Do not add new code
@@ -193,7 +194,7 @@ impl Service {
 
 pub fn routes(
     service: Arc<Service>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
     let mint = mint::mint_routes(service.clone());
     let health = health_route(service);
 
@@ -229,7 +230,7 @@ pub fn routes(
 
 fn health_route(
     service: Arc<Service>,
-) -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+) -> impl Filter<Extract = (impl Reply,), Error = Rejection> + Clone {
     warp::path!("health")
         .and(warp::get())
         .and(warp::any().map(move || service.clone()))

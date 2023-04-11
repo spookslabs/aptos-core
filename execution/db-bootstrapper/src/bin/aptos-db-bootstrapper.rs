@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{ensure, format_err, Context, Result};
@@ -103,7 +104,7 @@ fn main() -> Result<()> {
 }
 
 fn load_genesis_txn(path: &Path) -> Result<Transaction> {
-    let mut file = File::open(&path)?;
+    let mut file = File::open(path)?;
     let mut buffer = vec![];
     file.read_to_end(&mut buffer)?;
 

@@ -7,7 +7,13 @@
    - [Build static html files](#build-static-html-files)
    - [Debug/Format files](#debugging)
 
-This Aptos Developer Documenatation is built using [Docusaurus 2](https://docusaurus.io/). Follow the below steps to build the docs locally to test your contribution.
+This Aptos Developer Documentation is built using [Docusaurus 2](https://docusaurus.io/) and displayed on https://aptos.dev/. Follow the below steps to build the docs locally and test your contribution.
+
+We now use [lychee-broken-link-checker](https://github.com/marketplace/actions/lychee-broken-link-checker) to check for broken links in the GitHub Markdown. We are a corresponding link checker for pages on Aptos.dev.
+
+With results visible at:
+https://github.com//aptos-labs/aptos-core/actions/workflows/links.yml
+
 
 ## Installation
 
@@ -88,3 +94,13 @@ Fix formatting issues by running:
 ```
 pnpm fmt
 ```
+
+## Re-generate contributors
+
+The src/contributors.json file (which powers the list of Authors at the bottom of doc pages) needs to be manually generated. Run the following command:
+
+```
+pnpm contributors
+```
+
+And then create a PR with the updated src/contributors.json.

@@ -1,4 +1,4 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
 // This is required because a diesel macro makes clippy sad
@@ -269,7 +269,7 @@ impl TransactionQuery {
         let mut txs = transactions::table
             .filter(transactions::version.ge(start_version as i64))
             .order(transactions::version.asc())
-            .limit(number_to_get as i64)
+            .limit(number_to_get)
             .load::<Self>(conn)?;
 
         let mut user_transactions: Vec<Vec<UserTransactionQuery>> =

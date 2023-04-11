@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -40,9 +41,8 @@ use tokio::time::{Duration, Instant};
 pub const COMMIT_VOTE_REBROADCAST_INTERVAL_MS: u64 = 1500;
 pub const LOOP_INTERVAL_MS: u64 = 1500;
 
-pub type ResetAck = ();
-
-pub fn sync_ack_new() -> ResetAck {}
+#[derive(Debug, Default)]
+pub struct ResetAck {}
 
 pub struct ResetRequest {
     pub tx: oneshot::Sender<ResetAck>,
@@ -161,7 +161,7 @@ impl BufferManager {
         duration: Duration,
     ) {
         counters::BUFFER_MANAGER_RETRY_COUNT.inc();
-        spawn_named!(&"retry request", async move {
+        spawn_named!("retry request", async move {
             tokio::time::sleep(duration).await;
             sender
                 .send(request)
@@ -332,7 +332,7 @@ impl BufferManager {
 
         self.stop = stop;
         self.reset().await;
-        tx.send(sync_ack_new()).unwrap();
+        tx.send(ResetAck::default()).unwrap();
         info!("Reset finishes");
     }
 
@@ -443,11 +443,9 @@ impl BufferManager {
         match commit_msg {
             VerifiedEvent::CommitVote(vote) => {
                 // find the corresponding item
-                info!(
-                    "Receive commit vote {} from {}",
-                    vote.commit_info(),
-                    vote.author()
-                );
+                let author = vote.author();
+                let commit_info = vote.commit_info().clone();
+                info!("Receive commit vote {} from {}", commit_info, author);
                 let target_block_id = vote.commit_info().id();
                 let current_cursor = self
                     .buffer
@@ -457,7 +455,12 @@ impl BufferManager {
                     let new_item = match item.add_signature_if_matched(*vote) {
                         Ok(()) => item.try_advance_to_aggregated(&self.verifier),
                         Err(e) => {
-                            error!("Failed to add commit vote {:?}", e);
+                            error!(
+                                error = ?e,
+                                author = author,
+                                commit_info = commit_info,
+                                "Failed to add commit vote",
+                            );
                             item
                         },
                     };

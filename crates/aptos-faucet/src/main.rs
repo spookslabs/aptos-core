@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 // README: The aptos-faucet is deprecated in favor of the tap. Do not add new code
@@ -499,7 +500,7 @@ mod tests {
 
     fn get_address() -> AccountAddress {
         let pub_key: Ed25519PublicKey =
-            hex::decode(&"459c77a38803bd53f3adee52703810e3a74fd7c46952c497e75afb0a7932586d")
+            hex::decode("459c77a38803bd53f3adee52703810e3a74fd7c46952c497e75afb0a7932586d")
                 .unwrap()
                 .as_slice()
                 .try_into()

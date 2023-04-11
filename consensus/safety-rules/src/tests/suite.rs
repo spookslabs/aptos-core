@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{test_utils, test_utils::make_timeout_cert, Error, TSafetyRules};
@@ -341,7 +342,7 @@ fn test_validator_not_in_set(safety_rules: &Callback) {
 
     // validator_signer is set during initialization
     let state = safety_rules.consensus_state().unwrap();
-    assert_eq!(state.in_validator_set(), true);
+    assert!(state.in_validator_set());
 
     let a1 = test_utils::make_proposal_with_qc(round + 1, genesis_qc, &signer);
 
@@ -369,7 +370,7 @@ fn test_validator_not_in_set(safety_rules: &Callback) {
     ));
 
     let state = safety_rules.consensus_state().unwrap();
-    assert_eq!(state.in_validator_set(), false);
+    assert!(!state.in_validator_set());
 }
 
 // Tests for fetching a missing validator key from persistent storage.
@@ -406,7 +407,7 @@ fn test_key_not_in_store(safety_rules: &Callback) {
     safety_rules.initialize(&proof).unwrap_err();
 
     let state = safety_rules.consensus_state().unwrap();
-    assert_eq!(state.in_validator_set(), false);
+    assert!(!state.in_validator_set());
 }
 
 fn test_2chain_rules(constructor: &Callback) {

@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{Sleep, SleepTrait, TimeServiceTrait, ZERO_DURATION};
@@ -184,6 +185,12 @@ impl MockTimeService {
     /// See [`advance_async`](#method.advance_async).
     pub async fn advance_ms_async(&self, duration: u64) -> usize {
         self.advance_async(Duration::from_millis(duration)).await
+    }
+}
+
+impl Default for MockTimeService {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

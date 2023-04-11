@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -214,7 +215,7 @@ impl LocalSwarm {
             .collect::<Result<HashMap<_, _>>>()?;
 
         // We print out the root key to make it easy for users to deploy a local faucet
-        let encoded_root_key = hex::encode(&root_key.to_bytes());
+        let encoded_root_key = hex::encode(root_key.to_bytes());
         info!(
             "The root (or mint) key for the swarm is: 0x{}",
             encoded_root_key

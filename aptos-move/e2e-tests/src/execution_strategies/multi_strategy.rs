@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 #![forbid(unsafe_code)]
@@ -84,6 +85,6 @@ impl<TxnType: Clone, E: Error> Executor for MultiExecutor<TxnType, E> {
                 }
             }
         }
-        Ok(results.into_iter().map(|(_, v)| v).collect())
+        Ok(results.into_values().collect())
     }
 }

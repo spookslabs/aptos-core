@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use aptos_cached_packages::aptos_stdlib;
@@ -38,7 +39,7 @@ fn test_genesis() {
     let li = state_proof.latest_ledger_info();
     assert_eq!(li.version(), 0);
 
-    let account_resource_path = StateKey::AccessPath(AccessPath::new(
+    let account_resource_path = StateKey::access_path(AccessPath::new(
         CORE_CODE_ADDRESS,
         AccountResource::struct_tag().access_vector(),
     ));
@@ -62,6 +63,7 @@ fn test_genesis() {
 }
 
 #[test]
+#[cfg_attr(feature = "consensus-only-perf-test", ignore)]
 fn test_reconfiguration() {
     // When executing a transaction emits a validator set change,
     // storage should propagate the new validator set
@@ -178,6 +180,7 @@ fn test_reconfiguration() {
 }
 
 #[test]
+#[cfg_attr(feature = "consensus-only-perf-test", ignore)]
 fn test_execution_with_storage() {
     test_execution_with_storage_impl();
 }

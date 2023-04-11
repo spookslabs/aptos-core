@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -472,7 +473,7 @@ async fn test_need_sync_for_ledger_info() {
     assert!(block_store.need_sync_for_ledger_info(&ordered_too_far));
 
     let committed_round_too_far =
-        block_store.commit_root().round() + block_store.back_pressure_limit * 2 + 1;
+        block_store.commit_root().round() + block_store.back_pressure_limit * 3 + 1;
     let committed_too_far = create_ledger_info(committed_round_too_far);
     assert!(block_store.need_sync_for_ledger_info(&committed_too_far));
 

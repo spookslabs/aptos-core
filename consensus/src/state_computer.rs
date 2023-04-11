@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -13,10 +14,7 @@ use crate::{
 use anyhow::Result;
 use aptos_consensus_notifications::ConsensusNotificationSender;
 use aptos_consensus_types::{
-    block::Block,
-    common::{Payload, Round},
-    executed_block::ExecutedBlock,
-    proof_of_store::LogicalTime,
+    block::Block, executed_block::ExecutedBlock, proof_of_store::LogicalTime,
 };
 use aptos_crypto::HashValue;
 use aptos_executor_types::{BlockExecutorTrait, Error as ExecutionError, StateComputeResult};
@@ -37,12 +35,10 @@ type NotificationType = (
     Vec<ContractEvent>,
 );
 
-type CommitType = (u64, Round, Vec<Payload>);
-
 /// Basic communication with the Execution module;
 /// implements StateComputer traits.
 pub struct ExecutionProxy {
-    executor: Arc<dyn BlockExecutorTrait>,
+    executor: Arc<dyn BlockExecutorTrait<Transaction>>,
     txn_notifier: Arc<dyn TxnNotifier>,
     state_sync_notifier: Arc<dyn ConsensusNotificationSender>,
     async_state_sync_notifier: aptos_channels::Sender<NotificationType>,
@@ -53,7 +49,7 @@ pub struct ExecutionProxy {
 
 impl ExecutionProxy {
     pub fn new(
-        executor: Arc<dyn BlockExecutorTrait>,
+        executor: Arc<dyn BlockExecutorTrait<Transaction>>,
         txn_notifier: Arc<dyn TxnNotifier>,
         state_sync_notifier: Arc<dyn ConsensusNotificationSender>,
         handle: &tokio::runtime::Handle,
@@ -85,6 +81,7 @@ impl ExecutionProxy {
     }
 }
 
+// TODO: filter duplicated transaction before executing
 #[async_trait::async_trait]
 impl StateComputer for ExecutionProxy {
     async fn compute(
@@ -123,6 +120,7 @@ impl StateComputer for ExecutionProxy {
             .await
         )
         .expect("spawn_blocking failed")?;
+
         observe_block(block.timestamp_usecs(), BlockStage::EXECUTED);
 
         // notify mempool about failed transaction

@@ -1,4 +1,4 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::on_chain_config::OnChainConfig;
@@ -10,7 +10,15 @@ use serde::{Deserialize, Serialize};
 pub enum FeatureFlag {
     CODE_DEPENDENCY_CHECK = 1,
     TREAT_FRIEND_AS_PRIVATE = 2,
+    SHA_512_AND_RIPEMD_160_NATIVES = 3,
+    APTOS_STD_CHAIN_ID_NATIVES = 4,
     VM_BINARY_FORMAT_V6 = 5,
+    COLLECT_AND_DISTRIBUTE_GAS_FEES = 6,
+    MULTI_ED25519_PK_VALIDATE_V2_NATIVES = 7,
+    BLAKE2B_256_NATIVE = 8,
+    RESOURCE_GROUPS = 9,
+    MULTISIG_ACCOUNTS = 10,
+    DELEGATION_POOLS = 11,
 }
 
 /// Representation of features on chain as a bitset.
@@ -39,6 +47,10 @@ impl Features {
         let byte_index = (val / 8) as usize;
         let bit_mask = 1 << (val % 8);
         byte_index < self.features.len() && (self.features[byte_index] & bit_mask != 0)
+    }
+
+    pub fn are_resource_groups_enabled(&self) -> bool {
+        self.is_enabled(FeatureFlag::RESOURCE_GROUPS)
     }
 }
 

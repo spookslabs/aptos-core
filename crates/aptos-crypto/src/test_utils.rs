@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 //! Internal module containing convenience utility functions mainly for testing
@@ -146,7 +147,7 @@ pub fn small_order_pk_with_adversarial_message(
                 let mut h: Sha512 = Sha512::new();
                 h.update(R.compress().as_bytes());
                 h.update(pk_bytes);
-                h.update(&msg_bytes);
+                h.update(msg_bytes);
 
                 let k = Scalar::from_hash(h);
 

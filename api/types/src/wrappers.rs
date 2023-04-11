@@ -1,4 +1,4 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
 //! The purpose of this file is to define wrappers that we can use in the
@@ -120,8 +120,7 @@ pub struct StateKeyWrapper(pub StateKey);
 impl fmt::Display for StateKeyWrapper {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let hex_string = hex::encode(
-            &self
-                .0
+            self.0
                 .encode()
                 .context("Failed to encode StateKey")
                 .map_err(|_| fmt::Error)?,

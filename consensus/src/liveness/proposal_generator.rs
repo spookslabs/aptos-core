@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
@@ -308,7 +309,7 @@ impl ProposalGenerator {
         include_cur_round: bool,
         proposer_election: &mut UnequivocalProposerElection,
     ) -> Vec<(Round, Author)> {
-        let end_round = round + (if include_cur_round { 1 } else { 0 });
+        let end_round = round + u64::from(include_cur_round);
         let mut failed_authors = Vec::new();
         let start = std::cmp::max(
             previous_round + 1,

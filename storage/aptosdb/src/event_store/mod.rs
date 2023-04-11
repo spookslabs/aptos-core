@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 //! This file defines event store APIs that are related to the event accumulator and events
@@ -464,11 +465,11 @@ impl EventStore {
             for (current_index, event) in (events?).into_iter().enumerate() {
                 db_batch.delete::<EventByVersionSchema>(&(
                     *event.key(),
-                    current_version as u64,
+                    current_version,
                     event.sequence_number(),
                 ))?;
                 db_batch.delete::<EventByKeySchema>(&(*event.key(), event.sequence_number()))?;
-                db_batch.delete::<EventSchema>(&(current_version as u64, current_index as u64))?;
+                db_batch.delete::<EventSchema>(&(current_version, current_index as u64))?;
             }
             current_version += 1;
         }

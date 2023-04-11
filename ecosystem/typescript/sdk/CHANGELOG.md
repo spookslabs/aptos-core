@@ -6,6 +6,17 @@ All notable changes to the Aptos Node SDK will be captured in this file. This ch
 
 ## Unreleased
 
+## 1.7.0 (2023-03-01)
+
+- Add Indexer support. We introduce a new class `IndexerClient` that queries our Indexer to support data shaping fetching and providing users with a seamless experience.
+- Introduces a `Provider` class we can initialize and query our blockchain by hiding the underlying implementation (fullnode vs indexer)
+
+## 1.6.0 (2023-01-20)
+
+- Add support to Move view functions
+
+## 1.5.0 (2023-01-05)
+
 - Export classes from property_map_serde
 - User can specify token string property type using "string", "String" or "0x1::string::String" to serde the string token property on-chain
 - Use `getAccountResource` to replace `getAccountResources` in `CoinClient#checkBalance`, which can reduce network load.

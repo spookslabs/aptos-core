@@ -1,4 +1,4 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{AptosDB, LedgerPrunerManager, LedgerStore, PrunerManager, TransactionStore};
@@ -180,12 +180,12 @@ fn verify_txn_in_store(
     verify_transaction_in_transaction_store(
         transaction_store,
         txns.get(index as usize).unwrap(),
-        index as u64,
+        index,
     );
     if let Transaction::UserTransaction(txn) = txns.get(index as usize).unwrap() {
         verify_transaction_in_account_txn_by_version_index(
             transaction_store,
-            index as u64,
+            index,
             txn.sender(),
             txn.sequence_number(),
             ledger_version,

@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::common;
@@ -119,7 +120,7 @@ where
             writeln!(
                 self.out,
                 r#"
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
 // This file was generated. Do not modify!
@@ -854,6 +855,8 @@ fn decode_{}_argument(arg: TransactionArgument) -> Option<{}> {{
             .join(", ")
     }
 
+    // TODO: see if we can avoid passing in local types in this manner
+    #[allow(clippy::only_used_in_recursion)]
     fn quote_type(type_tag: &TypeTag, local_types: bool) -> String {
         use TypeTag::*;
         let str_tag: Lazy<StructTag> =
@@ -940,7 +943,7 @@ impl crate::SourceInstaller for Installer {
         };
         let dir_path = self.install_dir.join(&name);
         std::fs::create_dir_all(&dir_path)?;
-        let mut cargo = std::fs::File::create(&dir_path.join("Cargo.toml"))?;
+        let mut cargo = std::fs::File::create(dir_path.join("Cargo.toml"))?;
         write!(
             cargo,
             r#"[package]
@@ -958,7 +961,7 @@ aptos-types = {{ path = "../aptos-types", version = "{}" }}
         )?;
         std::fs::create_dir(dir_path.join("src"))?;
         let source_path = dir_path.join("src/lib.rs");
-        let mut source = std::fs::File::create(&source_path)?;
+        let mut source = std::fs::File::create(source_path)?;
         output(&mut source, abis, /* local_types */ false)?;
         Ok(())
     }

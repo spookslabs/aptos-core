@@ -111,6 +111,35 @@ module std::features {
         is_enabled(BLAKE2B_256_NATIVE)
     }
 
+    /// Whether resource groups are enabled.
+    /// This is needed because of new attributes for structs and a change in storage representation.
+    const RESOURCE_GROUPS: u64 = 9;
+
+    public fun get_resource_groups_feature(): u64 { RESOURCE_GROUPS }
+
+    public fun resource_groups_enabled(): bool acquires Features {
+        is_enabled(RESOURCE_GROUPS)
+    }
+
+    /// Whether multisig accounts (different from accounts with multi-ed25519 auth keys) are enabled.
+    const MULTISIG_ACCOUNTS: u64 = 10;
+
+    public fun get_multisig_accounts_feature(): u64 { MULTISIG_ACCOUNTS }
+
+    public fun multisig_accounts_enabled(): bool acquires Features {
+        is_enabled(MULTISIG_ACCOUNTS)
+    }
+
+    /// Whether delegation pools are enabled.
+    /// Lifetime: transient
+    const DELEGATION_POOLS: u64 = 11;
+
+    public fun get_delegation_pools_feature(): u64 { DELEGATION_POOLS }
+
+    public fun delegation_pools_enabled(): bool acquires Features {
+        is_enabled(DELEGATION_POOLS)
+    }
+
     // ============================================================================================
     // Feature Flag Implementation
 

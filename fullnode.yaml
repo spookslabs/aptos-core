@@ -1,0 +1,32 @@
+base:
+  role: "full_node"
+  data_dir: "/mnt/f/aptos/data"
+  waypoint:
+    from_file: "/mnt/f/aptos/genesis/waypoint.txt"
+
+execution:
+  genesis_file_location: "/mnt/f/aptos/genesis/genesis.blob"
+
+full_node_networks:
+  - network_id: "public"
+    discovery_method: "onchain"
+    listen_address: "/ip4/0.0.0.0/tcp/6182"
+
+api:
+  enabled: false
+  address: "0.0.0.0:8080"
+
+storage:
+  enable_indexer: true
+  storage_pruner_config:
+    ledger_pruner_config:
+      enable: false
+
+indexer:
+  enabled: true
+  check_chain_id: true
+  emit_every: 100
+  postgres_uri: "postgres://postgres@localhost:5432/postgres"
+  processor: "coin_processor"
+  fetch_tasks: 10
+  processor_tasks: 10

@@ -1,4 +1,4 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -9,16 +9,15 @@ use crate::{
 };
 use anyhow::Result;
 use aptos_aggregator::delta_change_set::{deserialize, serialize, DeltaOp};
-use aptos_infallible::Mutex;
 use aptos_mvhashmap::{MVHashMap, MVHashMapError, MVHashMapOutput};
 use aptos_state_view::{StateViewId, TStateView};
 use aptos_types::{
-    state_store::state_storage_usage::StateStorageUsage,
+    state_store::{state_storage_usage::StateStorageUsage, state_value::StateValue},
     vm_status::{StatusCode, VMStatus},
     write_set::TransactionWrite,
 };
 use move_binary_format::errors::Location;
-use std::{collections::BTreeMap, hash::Hash, sync::Arc};
+use std::{cell::RefCell, collections::BTreeMap, hash::Hash, sync::Arc};
 
 /// Resolved and serialized data for WriteOps, None means deletion.
 pub type ResolvedData = Option<Vec<u8>>;
@@ -33,7 +32,7 @@ pub type ResolvedData = Option<Vec<u8>>;
 pub(crate) struct MVHashMapView<'a, K, V> {
     versioned_map: &'a MVHashMap<K, V>,
     scheduler: &'a Scheduler,
-    captured_reads: Mutex<Vec<ReadDescriptor<K>>>,
+    captured_reads: RefCell<Vec<ReadDescriptor<K>>>,
 }
 
 /// A struct which describes the result of the read from the proxy. The client
@@ -60,14 +59,13 @@ impl<
         Self {
             versioned_map,
             scheduler,
-            captured_reads: Mutex::new(Vec::new()),
+            captured_reads: RefCell::new(Vec::new()),
         }
     }
 
     /// Drains the captured reads.
     pub(crate) fn take_reads(&self) -> Vec<ReadDescriptor<K>> {
-        let mut reads = self.captured_reads.lock();
-        std::mem::take(&mut reads)
+        self.captured_reads.take()
     }
 
     /// Captures a read from the VM execution.
@@ -80,25 +78,25 @@ impl<
                 Ok(Version(version, v)) => {
                     let (idx, incarnation) = version;
                     self.captured_reads
-                        .lock()
+                        .borrow_mut()
                         .push(ReadDescriptor::from_version(key.clone(), idx, incarnation));
                     return ReadResult::Value(v);
                 },
                 Ok(Resolved(value)) => {
                     self.captured_reads
-                        .lock()
+                        .borrow_mut()
                         .push(ReadDescriptor::from_resolved(key.clone(), value));
                     return ReadResult::U128(value);
                 },
                 Err(NotFound) => {
                     self.captured_reads
-                        .lock()
+                        .borrow_mut()
                         .push(ReadDescriptor::from_storage(key.clone()));
                     return ReadResult::None;
                 },
                 Err(Unresolved(delta)) => {
                     self.captured_reads
-                        .lock()
+                        .borrow_mut()
                         .push(ReadDescriptor::from_unresolved(key.clone(), delta));
                     return ReadResult::Unresolved(delta);
                 },
@@ -106,7 +104,7 @@ impl<
                     // `self.txn_idx` estimated to depend on a write from `dep_idx`.
                     match self.scheduler.wait_for_dependency(txn_idx, dep_idx) {
                         Some(dep_condition) => {
-                            counters::DEPENDENCY_SUSPEND_COUNT.inc();
+                            let _timer = counters::DEPENDENCY_WAIT_SECONDS.start_timer();
                             // Wait on a condition variable corresponding to the encountered
                             // read dependency. Once the dep_idx finishes re-execution, scheduler
                             // will mark the dependency as resolved, and then the txn_idx will be
@@ -135,7 +133,7 @@ impl<
                     // happened because of speculation and return 0 to the Move-VM. Validation will
                     // ensure the transaction re-executes if 0 wasn't the right number.
                     self.captured_reads
-                        .lock()
+                        .borrow_mut()
                         .push(ReadDescriptor::from_delta_application_failure(key.clone()));
                     return ReadResult::U128(0);
                 },
@@ -160,7 +158,7 @@ impl<'a, T: Transaction, S: TStateView<Key = T::Key>> LatestView<'a, T, S> {
         base_view: &'a S,
         map: &'a MVHashMapView<'a, T::Key, T::Value>,
         txn_idx: TxnIndex,
-    ) -> LatestView<T, S> {
+    ) -> LatestView<'a, T, S> {
         LatestView {
             base_view,
             latest_view: ViewMapKind::MultiVersion(map),
@@ -172,7 +170,7 @@ impl<'a, T: Transaction, S: TStateView<Key = T::Key>> LatestView<'a, T, S> {
         base_view: &'a S,
         map: &'a BTreeMap<T::Key, T::Value>,
         txn_idx: TxnIndex,
-    ) -> LatestView<T, S> {
+    ) -> LatestView<'a, T, S> {
         LatestView {
             base_view,
             latest_view: ViewMapKind::BTree(map),
@@ -184,22 +182,22 @@ impl<'a, T: Transaction, S: TStateView<Key = T::Key>> LatestView<'a, T, S> {
 impl<'a, T: Transaction, S: TStateView<Key = T::Key>> TStateView for LatestView<'a, T, S> {
     type Key = T::Key;
 
-    fn get_state_value(&self, state_key: &T::Key) -> anyhow::Result<Option<Vec<u8>>> {
+    fn get_state_value(&self, state_key: &T::Key) -> anyhow::Result<Option<StateValue>> {
         match self.latest_view {
             ViewMapKind::MultiVersion(map) => match map.read(state_key, self.txn_idx) {
-                ReadResult::Value(v) => Ok(v.extract_raw_bytes()),
-                ReadResult::U128(v) => Ok(Some(serialize(&v))),
+                ReadResult::Value(v) => Ok(v.as_state_value()),
+                ReadResult::U128(v) => Ok(Some(StateValue::new_legacy(serialize(&v)))),
                 ReadResult::Unresolved(delta) => {
                     let from_storage = self
                         .base_view
-                        .get_state_value(state_key)?
+                        .get_state_value_bytes(state_key)?
                         .map_or(Err(VMStatus::Error(StatusCode::STORAGE_ERROR)), |bytes| {
                             Ok(deserialize(&bytes))
                         })?;
                     let result = delta
                         .apply_to(from_storage)
                         .map_err(|pe| pe.finish(Location::Undefined).into_vm_status())?;
-                    Ok(Some(serialize(&result)))
+                    Ok(Some(StateValue::new_legacy(serialize(&result))))
                 },
                 ReadResult::None => self.base_view.get_state_value(state_key),
             },
@@ -220,7 +218,7 @@ impl<'a, T: Transaction, S: TStateView<Key = T::Key>> TStateView for LatestView<
                     // log_context.alert();
                     // ret
                 },
-                |v| Ok(v.extract_raw_bytes()),
+                |v| Ok(v.as_state_value()),
             ),
         }
     }

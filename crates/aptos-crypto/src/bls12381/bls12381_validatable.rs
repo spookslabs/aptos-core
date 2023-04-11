@@ -1,4 +1,4 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module implements the Validate trait for BLS12-381 public keys, which enables library users
@@ -55,7 +55,7 @@ impl Serialize for UnvalidatedPublicKey {
         S: serde::Serializer,
     {
         if serializer.is_human_readable() {
-            let encoded = ::hex::encode(&self.0);
+            let encoded = ::hex::encode(self.0);
             serializer.serialize_str(&format!("0x{}", encoded))
         } else {
             // See comment in deserialize_key.

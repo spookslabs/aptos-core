@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 use aptos_crypto::{
@@ -265,7 +266,7 @@ impl NetworkAddress {
 
         let mut p = iter.next();
 
-        if p == None {
+        if p.is_none() {
             return Ok(Self(protocols));
         }
 
@@ -275,7 +276,7 @@ impl NetworkAddress {
 
         if !matches!(p, Some(Memory(_))) {
             p = iter.next();
-            if p == None {
+            if p.is_none() {
                 return Ok(Self(protocols));
             }
             if !is_transport_layer(p) {
@@ -284,7 +285,7 @@ impl NetworkAddress {
         }
 
         p = iter.next();
-        if p == None {
+        if p.is_none() {
             return Ok(Self(protocols));
         }
         if !is_session_layer(p, true) {
@@ -292,7 +293,7 @@ impl NetworkAddress {
         }
 
         p = iter.next();
-        if p == None {
+        if p.is_none() {
             return Ok(Self(protocols));
         }
         if !is_handshake_layer(p, true) {
@@ -300,7 +301,7 @@ impl NetworkAddress {
         }
 
         p = iter.next();
-        if p == None {
+        if p.is_none() {
             Ok(Self(protocols))
         } else {
             Err(ParseError::RedundantLayer)

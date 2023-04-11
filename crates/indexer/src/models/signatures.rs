@@ -1,4 +1,4 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 #![allow(clippy::extra_unused_lifetimes)]
 
@@ -130,7 +130,7 @@ impl Signature {
         for (index, signature) in s.signatures.iter().enumerate() {
             let public_key = s
                 .public_keys
-                .get(public_key_indices.clone()[index] as usize)
+                .get(public_key_indices.clone()[index])
                 .unwrap()
                 .clone();
             signatures.push(Self {

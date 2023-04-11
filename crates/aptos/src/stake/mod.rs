@@ -1,4 +1,4 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
@@ -184,7 +184,9 @@ impl CliCommand<Vec<TransactionSummary>> for UnlockStake {
 /// Before calling `WithdrawStake`, `UnlockStake` must be called first.
 #[derive(Parser)]
 pub struct WithdrawStake {
-    /// Amount of Octas (10^-8 APT) to withdraw
+    /// Amount of Octas (10^-8 APT) to withdraw.
+    /// This only applies to stake pools owned directly by the owner account, instead of via
+    /// a staking contract. In the latter case, when withdrawal is issued, all coins are distributed
     #[clap(long)]
     pub amount: u64,
 
@@ -193,16 +195,51 @@ pub struct WithdrawStake {
 }
 
 #[async_trait]
-impl CliCommand<TransactionSummary> for WithdrawStake {
+impl CliCommand<Vec<TransactionSummary>> for WithdrawStake {
     fn command_name(&self) -> &'static str {
         "WithdrawStake"
     }
 
-    async fn execute(mut self) -> CliTypedResult<TransactionSummary> {
-        self.node_op_options
-            .submit_transaction(aptos_stdlib::stake_withdraw(self.amount))
-            .await
-            .map(|inner| inner.into())
+    async fn execute(mut self) -> CliTypedResult<Vec<TransactionSummary>> {
+        let client = self
+            .node_op_options
+            .rest_options
+            .client(&self.node_op_options.profile_options)?;
+        let amount = self.amount;
+        let owner_address = self.node_op_options.sender_address()?;
+        let mut transaction_summaries: Vec<TransactionSummary> = vec![];
+
+        let stake_pool_results = get_stake_pools(&client, owner_address).await?;
+        for stake_pool in stake_pool_results {
+            match stake_pool.pool_type {
+                StakePoolType::Direct => {
+                    transaction_summaries.push(
+                        self.node_op_options
+                            .submit_transaction(aptos_stdlib::stake_withdraw(amount))
+                            .await
+                            .map(|inner| inner.into())?,
+                    );
+                },
+                StakePoolType::StakingContract => {
+                    transaction_summaries.push(
+                        self.node_op_options
+                            .submit_transaction(aptos_stdlib::staking_contract_distribute(
+                                owner_address,
+                                stake_pool.operator_address,
+                            ))
+                            .await
+                            .map(|inner| inner.into())?,
+                    );
+                },
+                StakePoolType::Vesting => {
+                    return Err(CliError::UnexpectedError(
+                        "Stake withdrawal from vesting contract should use distribute-vested-coins"
+                            .into(),
+                    ))
+                },
+            }
+        }
+        Ok(transaction_summaries)
     }
 }
 
@@ -307,8 +344,9 @@ impl CliCommand<TransactionSummary> for InitializeStakeOwner {
     }
 }
 
-/// Delegate operator capability from the current operator to another account
+/// Delegate operator capability to another account
 ///
+/// This changes teh operator capability from its current operator to a different operator.
 /// By default, the operator of a stake pool is the owner of the stake pool
 #[derive(Parser)]
 pub struct SetOperator {
@@ -382,8 +420,9 @@ impl CliCommand<Vec<TransactionSummary>> for SetOperator {
     }
 }
 
-/// Delegate voting capability from the current voter to another account
+/// Delegate voting capability to another account
 ///
+/// Delegates voting capability from its current voter to a different voter.
 /// By default, the voter of a stake pool is the owner of the stake pool
 #[derive(Parser)]
 pub struct SetDelegatedVoter {
@@ -510,7 +549,9 @@ impl CliCommand<TransactionSummary> for CreateStakingContract {
     }
 }
 
-/// Distribute any fully unlocked tokens (rewards and/or vested tokens) from the vesting contract
+/// Distribute fully unlocked coins from vesting
+///
+/// Distribute fully unlocked coins (rewards and/or vested coins) from the vesting contract
 /// to shareholders.
 #[derive(Parser)]
 pub struct DistributeVestedCoins {
@@ -537,8 +578,10 @@ impl CliCommand<TransactionSummary> for DistributeVestedCoins {
     }
 }
 
-/// Unlock any vesting tokens according to the vesting contract's schedule.
-/// This also unlock any accumulated staking rewards and pays commission to the operator of the
+/// Unlock vested coins
+///
+/// Unlock vested coins according to the vesting contract's schedule.
+/// This also unlocks any accumulated staking rewards and pays commission to the operator of the
 /// vesting contract's stake pool first.
 ///
 /// The unlocked vested tokens and staking rewards are still subject to the staking lockup and

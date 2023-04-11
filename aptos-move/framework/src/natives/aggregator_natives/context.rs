@@ -1,4 +1,4 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
 use aptos_aggregator::{
@@ -167,7 +167,7 @@ mod test {
             .iter()
             .flat_map(|b| b.to_vec())
             .collect();
-        let key = AggregatorHandle(AccountAddress::from_bytes(&bytes).unwrap());
+        let key = AggregatorHandle(AccountAddress::from_bytes(bytes).unwrap());
         AggregatorID::new(TableHandle(AccountAddress::ZERO), key)
     }
 

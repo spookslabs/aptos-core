@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 #![forbid(unsafe_code)]
@@ -286,7 +287,7 @@ mod tests {
     use futures::{executor::block_on, FutureExt, StreamExt};
     use move_core_types::language_storage::TypeTag;
     use std::time::Duration;
-    use tokio::runtime::{Builder, Runtime};
+    use tokio::runtime::Runtime;
 
     const CONSENSUS_NOTIFICATION_TIMEOUT: u64 = 1000;
 
@@ -454,10 +455,6 @@ mod tests {
     }
 
     fn create_runtime() -> Runtime {
-        Builder::new_multi_thread()
-            .disable_lifo_slot()
-            .enable_all()
-            .build()
-            .unwrap()
+        aptos_runtimes::spawn_named_runtime("test".into(), None)
     }
 }

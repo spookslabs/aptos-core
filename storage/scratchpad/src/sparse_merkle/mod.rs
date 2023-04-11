@@ -1,4 +1,5 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
+// Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module implements an in-memory Sparse Merkle Tree that is similar to what we use in
@@ -572,7 +573,7 @@ where
                 NodeInner::Leaf(leaf_node) => {
                     let mut path = NibblePath::new_even(leaf_node.key.to_vec());
                     if !is_nibble {
-                        path.truncate(pos.len() as usize / BITS_IN_NIBBLE + 1);
+                        path.truncate(pos.len() / BITS_IN_NIBBLE + 1);
                     }
                     node_hashes.insert(path, subtree.hash());
                 },

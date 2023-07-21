@@ -9,6 +9,7 @@ members = [
     "aptos-move/aptos-aggregator",
     "aptos-move/aptos-debugger",
     "aptos-move/aptos-gas",
+    "aptos-move/aptos-gas-profiling",
     "aptos-move/aptos-release-builder",
     "aptos-move/aptos-resource-viewer",
     "aptos-move/aptos-sdk-builder",
@@ -16,6 +17,7 @@ members = [
     "aptos-move/aptos-transactional-test-harness",
     "aptos-move/aptos-validator-interface",
     "aptos-move/aptos-vm",
+    "aptos-move/aptos-vm-logging",
     "aptos-move/aptos-vm-profiling",
     "aptos-move/block-executor",
     "aptos-move/e2e-move-tests",
@@ -30,6 +32,7 @@ members = [
     "aptos-move/vm-genesis",
     "aptos-move/writeset-transaction-generator",
     "aptos-node",
+    "aptos-utils",
     "config",
     "config/global-constants",
     "consensus",
@@ -41,12 +44,17 @@ members = [
     "crates/aptos-compression",
     "crates/aptos-crypto",
     "crates/aptos-crypto-derive",
-    "crates/aptos-faucet",
-    "crates/aptos-faucet-cli",
+    "crates/aptos-faucet/cli",
+    "crates/aptos-faucet/core",
+    "crates/aptos-faucet/metrics-server",
+    "crates/aptos-faucet/service",
     "crates/aptos-genesis",
+    "crates/aptos-github-client",
     "crates/aptos-id-generator",
     "crates/aptos-infallible",
+    "crates/aptos-inspection-service",
     "crates/aptos-keygen",
+    "crates/aptos-ledger",
     "crates/aptos-log-derive",
     "crates/aptos-logger",
     "crates/aptos-metrics-core",
@@ -54,6 +62,7 @@ members = [
     "crates/aptos-node-identity",
     "crates/aptos-openapi",
     "crates/aptos-proptest-helpers",
+    "crates/aptos-push-metrics",
     "crates/aptos-rate-limiter",
     "crates/aptos-rest-client",
     "crates/aptos-retrier",
@@ -72,7 +81,6 @@ members = [
     "crates/fallible",
     "crates/indexer",
 	"crates/indexer-http",
-    "crates/inspection-service",
     "crates/moving-average",
     "crates/node-resource-metrics",
     "crates/num-variants",
@@ -80,10 +88,14 @@ members = [
     "crates/short-hex-str",
     "crates/transaction-emitter",
     "crates/transaction-emitter-lib",
+    "crates/transaction-generator-lib",
     "ecosystem/indexer-grpc/indexer-grpc-cache-worker",
     "ecosystem/indexer-grpc/indexer-grpc-data-service",
     "ecosystem/indexer-grpc/indexer-grpc-file-store",
     "ecosystem/indexer-grpc/indexer-grpc-fullnode",
+    "ecosystem/indexer-grpc/indexer-grpc-parser",
+    "ecosystem/indexer-grpc/indexer-grpc-post-processor",
+     "ecosystem/indexer-grpc/indexer-grpc-server-framework",
     "ecosystem/indexer-grpc/indexer-grpc-utils",
     "ecosystem/node-checker",
     "ecosystem/node-checker/fn-check-client",
@@ -104,7 +116,6 @@ members = [
     "sdk",
     "secure/net",
     "secure/storage",
-    "secure/storage/github",
     "secure/storage/vault",
     "state-sync/aptos-data-client",
     "state-sync/inter-component/consensus-notifications",
@@ -120,6 +131,7 @@ members = [
     "storage/backup/backup-cli",
     "storage/backup/backup-service",
     "storage/db-tool",
+    "storage/executable-store",
     "storage/indexer",
     "storage/jellyfish-merkle",
     "storage/rocksdb-options",
@@ -138,6 +150,56 @@ members = [
     "testsuite/module-publish",
     "testsuite/smoke-test",
     "testsuite/testcases",
+
+    # third_party/move
+    "third_party/move/extensions/async/move-async-vm",
+    "third_party/move/extensions/move-table-extension",
+    "third_party/move/move-analyzer",
+    "third_party/move/move-binary-format",
+    "third_party/move/move-binary-format/serializer-tests",
+    "third_party/move/move-borrow-graph",
+    "third_party/move/move-bytecode-verifier",
+    "third_party/move/move-bytecode-verifier/bytecode-verifier-tests",
+    "third_party/move/move-bytecode-verifier/fuzz",
+    "third_party/move/move-bytecode-verifier/invalid-mutations",
+    "third_party/move/move-bytecode-verifier/transactional-tests",
+    "third_party/move/move-command-line-common",
+    "third_party/move/move-compiler",
+    "third_party/move/move-compiler/transactional-tests",
+    "third_party/move/move-core/types",
+    "third_party/move/move-ir-compiler",
+    "third_party/move/move-ir-compiler/move-bytecode-source-map",
+    "third_party/move/move-ir-compiler/move-ir-to-bytecode",
+    "third_party/move/move-ir-compiler/move-ir-to-bytecode/syntax",
+    "third_party/move/move-ir-compiler/transactional-tests",
+    "third_party/move/move-ir/types",
+    "third_party/move/move-model",
+    "third_party/move/move-prover",
+    "third_party/move/move-prover/boogie-backend",
+    "third_party/move/move-prover/bytecode",
+    "third_party/move/move-prover/move-abigen",
+    "third_party/move/move-prover/move-docgen",
+    "third_party/move/move-prover/move-errmapgen",
+    "third_party/move/move-prover/test-utils",
+    "third_party/move/move-symbol-pool",
+    "third_party/move/move-vm/integration-tests",
+    "third_party/move/move-vm/paranoid-tests",
+    "third_party/move/move-vm/runtime",
+    "third_party/move/move-vm/test-utils",
+    "third_party/move/move-vm/transactional-tests",
+    "third_party/move/move-vm/types",
+    "third_party/move/testing-infra/module-generation",
+    "third_party/move/testing-infra/test-generation",
+    "third_party/move/testing-infra/transactional-test-runner",
+    "third_party/move/tools/move-bytecode-utils",
+    "third_party/move/tools/move-bytecode-viewer",
+    "third_party/move/tools/move-cli",
+    "third_party/move/tools/move-coverage",
+    "third_party/move/tools/move-disassembler",
+    "third_party/move/tools/move-explain",
+    "third_party/move/tools/move-package",
+    "third_party/move/tools/move-resource-viewer",
+    "third_party/move/tools/move-unit-test",
     "types",
     "vm-validator",
 ]
@@ -153,7 +215,7 @@ default-members = [
     "aptos-node",
     "consensus/safety-rules",
     "crates/aptos",
-    "crates/aptos-faucet",
+    "crates/aptos-faucet/service",
     "crates/aptos-keygen",
     "crates/aptos-rate-limiter",
     "crates/aptos-rosetta",
@@ -207,32 +269,41 @@ aptos-db-indexer = { path = "storage/indexer" }
 aptos-db-tool = { path = "storage/db-tool" }
 aptos-debugger = { path = "aptos-move/aptos-debugger" }
 aptos-event-notifications = { path = "state-sync/inter-component/event-notifications" }
+aptos-executable-store = { path = "storage/executable-store" }
 aptos-executor = { path = "execution/executor" }
 aptos-executor-test-helpers = { path = "execution/executor-test-helpers" }
 aptos-executor-types = { path = "execution/executor-types" }
-aptos-faucet = { path = "crates/aptos-faucet" }
+aptos-faucet-cli = { path = "crates/aptos-faucet/cli" }
+aptos-faucet-core = { path = "crates/aptos-faucet/core" }
+aptos-faucet-service = { path = "crates/aptos-faucet/service" }
+aptos-faucet-metrics-server = { path = "crates/aptos-faucet/metrics-server" }
 aptos-fallible = { path = "crates/fallible" }
 aptos-forge = { path = "testsuite/forge" }
 aptos-framework = { path = "aptos-move/framework" }
 aptos-fuzzer = { path = "testsuite/aptos-fuzzer" }
 aptos-gas = { path = "aptos-move/aptos-gas" }
 aptos-gas-algebra-ext = { path = "aptos-move/gas-algebra-ext" }
+aptos-gas-profiling = { path = "aptos-move/aptos-gas-profiling" }
 aptos-genesis = { path = "crates/aptos-genesis" }
-aptos-github-client = { path = "secure/storage/github" }
+aptos-github-client = { path = "crates/aptos-github-client" }
 aptos-global-constants = { path = "config/global-constants" }
 aptos-id-generator = { path = "crates/aptos-id-generator" }
 aptos-indexer = { path = "crates/indexer" }
+aptos-indexer-http = { path = "crates/indexer-http" }
 aptos-indexer-grpc-cache-worker = { path = "ecosystem/indexer-grpc/indexer-grpc-cache-worker" }
 aptos-indexer-grpc-data-service = { path = "ecosystem/indexer-grpc/indexer-grpc-data-service" }
 aptos-indexer-grpc-file-store = { path = "ecosystem/indexer-grpc/indexer-grpc-file-store" }
+aptos-indexer-grpc-post-processor = { path = "ecosystem/indexer-grpc/indexer-grpc-post-processor" }
 aptos-indexer-grpc-fullnode = { path = "ecosystem/indexer-grpc/indexer-grpc-fullnode" }
 aptos-indexer-grpc-utils = { path = "ecosystem/indexer-grpc/indexer-grpc-utils" }
-aptos-indexer-http = { path = "crates/indexer-http" }
+aptos-indexer-grpc-parser = { path = "ecosystem/indexer-grpc/indexer-grpc-parser" }
+aptos-indexer-grpc-server-framework = { path = "ecosystem/indexer-grpc/indexer-grpc-server-framework" }
 aptos-infallible = { path = "crates/aptos-infallible" }
-aptos-inspection-service = { path = "crates/inspection-service" }
+aptos-inspection-service = { path = "crates/aptos-inspection-service" }
 aptos-jellyfish-merkle = { path = "storage/jellyfish-merkle" }
 aptos-keygen = { path = "crates/aptos-keygen" }
 aptos-language-e2e-tests = { path = "aptos-move/e2e-tests" }
+aptos-ledger = { path = "crates/aptos-ledger" }
 aptos-log-derive = { path = "crates/aptos-log-derive" }
 aptos-logger = { path = "crates/aptos-logger" }
 aptos-mempool = { path = "mempool" }
@@ -288,13 +359,18 @@ aptos-telemetry = { path = "crates/aptos-telemetry" }
 aptos-telemetry-service = { path = "crates/aptos-telemetry-service" }
 aptos-temppath = { path = "crates/aptos-temppath" }
 aptos-testcases = { path = "testsuite/testcases" }
-aptos-time-service = { path = "crates/aptos-time-service", features = ["async"] }
+aptos-time-service = { path = "crates/aptos-time-service", features = [
+    "async",
+] }
 aptos-transaction-emitter-lib = { path = "crates/transaction-emitter-lib" }
+aptos-transaction-generator-lib = { path = "crates/transaction-generator-lib" }
 aptos-transactional-test-harness = { path = "aptos-move/aptos-transactional-test-harness" }
 aptos-types = { path = "types" }
+aptos-utils = { path = "aptos-utils" }
 aptos-validator-interface = { path = "aptos-move/aptos-validator-interface" }
 aptos-vault-client = { path = "secure/storage/vault" }
 aptos-vm = { path = "aptos-move/aptos-vm" }
+aptos-vm-logging = { path = "aptos-move/aptos-vm-logging" }
 aptos-vm-genesis = { path = "aptos-move/vm-genesis" }
 aptos-vm-validator = { path = "vm-validator" }
 aptos-warp-webserver = { path = "crates/aptos-warp-webserver" }
@@ -306,6 +382,11 @@ again = "0.1.2"
 anyhow = "1.0.62"
 arc-swap = "1.5.0"
 arr_macro = "0.1.3"
+ark-bls12-381 = "0.4.0"
+ark-ec = "0.4.0"
+ark-ff = "0.4.0"
+ark-serialize = "0.4.0"
+ark-std = { version = "0.4.0", features = ["getrandom"] }
 assert_approx_eq = "1.1.0"
 assert_unordered = "0.1.1"
 async-stream = "0.3"
@@ -324,6 +405,7 @@ blst = "0.3.7"
 byteorder = "1.4.3"
 bytes = "1.1.0"
 chrono = { version = "0.4.19", features = ["clock", "serde"] }
+cfg_block = "0.1.1"
 cfg-if = "1.0.0"
 claims = "0.7"
 clap = { version = "3.2.23", features = ["derive", "env", "suggestions"] }
@@ -336,7 +418,7 @@ criterion = "0.3.5"
 criterion-cpu-time = "0.1.0"
 crossbeam = "0.8.1"
 crossbeam-channel = "0.5.4"
-crossbeam-queue = "0.3.5"
+csv = "1.2.1"
 curve25519-dalek = "3"
 dashmap = "5.2.0"
 datatest-stable = "0.1.1"
@@ -380,13 +462,15 @@ hyper-tls = "0.5.0"
 include_dir = { version = "0.7.2", features = ["glob"] }
 indicatif = "0.15.0"
 indoc = "1.0.6"
+inferno = "0.11.14"
 ipnet = "2.5.0"
 itertools = "0.10.3"
-jemallocator = { version = "0.3.2", features = ["profiling", "unprefixed_malloc_on_supported_platforms"] }
+jemallocator = { version = "0.3.2", features = [
+    "profiling",
+    "unprefixed_malloc_on_supported_platforms",
+] }
 json-patch = "0.2.6"
 jsonwebtoken = "8.1"
-k8s-openapi = { version = "0.11.0", default-features = false, features = ["v1_15"] }
-kube = { version = "0.51.0", features = ["jsonpatch"] }
 libfuzzer-sys = "=0.3.2"
 libsecp256k1 = "0.7.0"
 log = "0.4.17"
@@ -403,22 +487,23 @@ num_cpus = "1.13.1"
 num-derive = "0.3.3"
 num-traits = "0.2.15"
 once_cell = "1.10.0"
+ouroboros = "0.15.6"
 owo-colors = "3.5.0"
 parking_lot = "0.12.0"
 paste = "1.0.7"
 pbjson = "0.4.0"
 percent-encoding = "2.1.0"
 pin-project = "1.0.10"
-poem = { version = "1.3.40", features = ["anyhow", "rustls"] }
-poem-openapi = { version = "2.0.10", features = ["swagger-ui", "url"] }
+poem = { version = "=1.3.55", features = ["anyhow", "rustls"] }
+poem-openapi = { version = "=2.0.11", features = ["swagger-ui", "url"] }
+poem-openapi-derive = "=2.0.11"
 pretty_assertions = "1.2.1"
 procfs = "0.14.1"
 proc-macro2 = "1.0.38"
 project-root = "0.2.2"
 prometheus = { version = "0.13.0", default-features = false }
 prometheus-http-query = "0.5.2"
-# Necessary until this lands: https://github.com/ccakes/prometheus-parse-rs/pull/6.
-prometheus-parse = { git = "https://github.com/banool/prometheus-parse-rs", rev = "b65a1f20c5c604a9d2d1e545f70ca51ea8da2354" }
+prometheus-parse = "0.2.4"
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
 prost = "0.11.3"
@@ -427,6 +512,7 @@ quanta = "0.10.1"
 quote = "1.0.18"
 rand = "0.7.3"
 rand_core = "0.5.1"
+random_word = "0.3.0"
 rayon = "1.5.2"
 redis = { version = "0.22.3", features = ["tokio-comp", "script"] }
 redis-test = { version = "0.1.1", features = ["aio"] }
@@ -436,17 +522,19 @@ reqwest-middleware = "0.2.0"
 reqwest-retry = "0.2.1"
 ring = { version = "0.16.20", features = ["std"] }
 ripemd = "0.1.1"
-rocksdb = { version = "0.19.0", features = ["lz4"] }
+rocksdb = { version = "0.20.1", features = ["lz4"] }
 rstest = "0.15.0"
 rusty-fork = "0.3.0"
 sha-1 = "0.10.0"
 sha2 = "0.9.3"
+sha2_0_10_6 = { package = "sha2", version = "0.10.6" }
 sha3 = "0.9.1"
 siphasher = "0.3.10"
 serde = { version = "1.0.137", features = ["derive", "rc"] }
 serde_bytes = "0.11.6"
 serde_json = { version = "1.0.81", features = ["preserve_order"] }
 serde_repr = "0.1"
+serde_merge = "0.1.3"
 serde-name = "0.1.1"
 serde-generate = { git = "https://github.com/aptos-labs/serde-reflection", rev = "839aed62a20ddccf043c08961cfe74875741ccba" }
 serde-reflection = { git = "https://github.com/aptos-labs/serde-reflection", rev = "839aed62a20ddccf043c08961cfe74875741ccba" }
@@ -469,56 +557,66 @@ thiserror = "1.0.37"
 tiny-bip39 = "0.8.2"
 tiny-keccak = { version = "2.0.2", features = ["keccak", "sha3"] }
 tracing = "0.1.34"
-tracing-subscriber = "0.3.11"
+tracing-subscriber = { version = "0.3.11", features = ["json", "env-filter"] }
 trybuild = "1.0.41"
 tokio = { version = "1.21.0", features = ["full"] }
+tokio-io-timeout = "1.2.0"
 tokio-metrics = "0.1.0"
 tokio-retry = "0.3.0"
 tokio-stream = "0.1.8"
 tokio-test = "0.4.1"
 tokio-util = { version = "0.7.2", features = ["compat", "codec"] }
 toml = "0.5.9"
-tonic = { version = "0.8.3", features = ["tls-roots", "transport", "prost", "gzip", "codegen"] }
-ureq = { version = "1.5.4", features = ["json", "native-tls"], default_features = false }
+tonic = { version = "0.8.3", features = [
+    "tls-roots",
+    "transport",
+    "prost",
+    "gzip",
+    "codegen",
+] }
+tonic-reflection = "0.6.0"
+ureq = { version = "1.5.4", features = [
+    "json",
+    "native-tls",
+], default_features = false }
 url = { version = "2.2.2", features = ["serde"] }
 uuid = { version = "1.0.0", features = ["v4", "serde"] }
 walkdir = "2.3.2"
-warp = { version = "0.3.2", features = ["tls"] }
+warp = { version = "0.3.3", features = ["tls"] }
 warp-reverse-proxy = "0.5.0"
 which = "4.2.5"
 x25519-dalek = "1.2.0"
 
-# Note: the BEGIN and END comments below are required for external tooling. Do not remove.
-# BEGIN MOVE DEPENDENCIES
-move-abigen = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-binary-format = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-cli = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-command-line-common = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-compiler ={ git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af", features = ["address32"] }
-move-docgen = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-ir-compiler = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-model = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-package = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-prover = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-prover-boogie-backend = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-stackless-bytecode = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-prover-test-utils = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-resource-viewer = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-stackless-bytecode-interpreter = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-stdlib = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-symbol-pool = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-table-extension = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-transactional-test-runner = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-move-unit-test = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af", features = ["table-extension"] }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af", features = ["lazy_natives"] }
-move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af", features = ["table-extension"] }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-read-write-set = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-read-write-set-dynamic = { git = "https://github.com/move-language/move", rev = "d24f133e84c69bccba50c403ef5f1b9c08fe11af" }
-# END MOVE DEPENDENCIES
+# MOVE DEPENDENCIES
+move-abigen = { path = "third_party/move/move-prover/move-abigen" }
+move-binary-format = { path = "third_party/move/move-binary-format" }
+move-bytecode-verifier = { path = "third_party/move/move-bytecode-verifier" }
+move-bytecode-utils = { path = "third_party/move/tools/move-bytecode-utils" }
+move-cli = { path = "third_party/move/tools/move-cli" }
+move-command-line-common = { path = "third_party/move/move-command-line-common" }
+move-coverage = { path = "third_party/move/tools/move-coverage" }
+move-compiler = { path = "third_party/move/move-compiler" }
+move-core-types = { path = "third_party/move/move-core/types" }
+move-docgen = { path = "third_party/move/move-prover/move-docgen" }
+move-disassembler = { path = "third_party/move/tools/move-disassembler" }
+move-ir-types = { path = "third_party/move/move-ir/types" }
+move-ir-compiler = { path = "third_party/move/move-ir-compiler" }
+move-bytecode-source-map = { path = "third_party/move/move-ir-compiler/move-bytecode-source-map" }
+move-model = { path = "third_party/move/move-model" }
+move-package = { path = "third_party/move/tools/move-package" }
+move-prover = { path = "third_party/move/move-prover" }
+move-prover-boogie-backend = { path = "third_party/move/move-prover/boogie-backend" }
+move-stackless-bytecode = { path = "third_party/move/move-prover/bytecode" }
+aptos-move-stdlib = { path = "aptos-move/framework/move-stdlib" }
+move-prover-test-utils = { path = "third_party/move/move-prover/test-utils" }
+move-resource-viewer = { path = "third_party/move/tools/move-resource-viewer" }
+move-symbol-pool = { path = "third_party/move/move-symbol-pool" }
+move-table-extension = { path = "third_party/move/extensions/move-table-extension" }
+move-transactional-test-runner = { path = "third_party/move/testing-infra/transactional-test-runner" }
+move-unit-test = { path = "third_party/move/tools/move-unit-test", features = ["table-extension"] }
+move-vm-runtime = { path = "third_party/move/move-vm/runtime" }
+move-vm-test-utils = { path = "third_party/move/move-vm/test-utils", features = ["table-extension"] }
+move-vm-types = { path = "third_party/move/move-vm/types" }
 
 [profile.release]
 debug = true
@@ -531,14 +629,14 @@ inherits = "release"
 opt-level = 3
 debug = true
 overflow-checks = true
-lto = true
+lto = "thin"
 codegen-units = 1
 
 [profile.cli]
 inherits = "release"
 debug = false
 opt-level = "z"
-lto = true
+lto = "thin"
 strip = true
 codegen-units = 1
 
@@ -550,5 +648,4 @@ debug = true
 # This will be removed once our pull requests land.
 # https://github.com/rust-rocksdb/rust-rocksdb/issues/666
 [patch.crates-io]
-rocksdb = { git = 'https://github.com/aptos-labs/rust-rocksdb' }
 serde-reflection = { git = "https://github.com/aptos-labs/serde-reflection", rev = "839aed62a20ddccf043c08961cfe74875741ccba" }

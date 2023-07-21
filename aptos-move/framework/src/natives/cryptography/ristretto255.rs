@@ -9,7 +9,7 @@ use crate::{
     safely_assert_eq, safely_pop_arg,
 };
 use aptos_types::{
-    on_chain_config::{TimedFeatureFlag, TimedFeatures},
+    on_chain_config::{Features, TimedFeatures},
     vm_status::StatusCode,
 };
 use curve25519_dalek::scalar::Scalar;
@@ -17,7 +17,7 @@ use move_binary_format::errors::PartialVMError;
 use move_core_types::gas_algebra::{InternalGasPerArg, InternalGasPerByte};
 use move_vm_runtime::native_functions::NativeFunction;
 use move_vm_types::values::{Reference, StructRef, Value};
-use std::collections::VecDeque;
+use std::{collections::VecDeque, sync::Arc};
 
 /// The size of a serialized scalar, in bytes.
 pub(crate) const SCALAR_NUM_BYTES: usize = 32;
@@ -60,6 +60,7 @@ pub struct GasParameters {
 pub fn make_all(
     gas_params: GasParameters,
     timed_features: TimedFeatures,
+    features: Arc<Features>,
 ) -> impl Iterator<Item = (String, NativeFunction)> {
     let natives = [
         (
@@ -67,6 +68,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_point::native_point_is_canonical,
             ),
         ),
@@ -75,6 +77,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_point::native_point_identity,
             ),
         ),
@@ -83,6 +86,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_point::native_point_decompress,
             ),
         ),
@@ -91,6 +95,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_point::native_point_compress,
             ),
         ),
@@ -99,6 +104,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_point::native_point_mul,
             ),
         ),
@@ -107,6 +113,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_point::native_point_equals,
             ),
         ),
@@ -115,6 +122,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_point::native_point_neg,
             ),
         ),
@@ -123,6 +131,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_point::native_point_add,
             ),
         ),
@@ -131,6 +140,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_point::native_point_sub,
             ),
         ),
@@ -139,6 +149,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_point::native_basepoint_mul,
             ),
         ),
@@ -147,6 +158,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_point::native_basepoint_double_mul,
             ),
         ),
@@ -155,6 +167,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_point::native_new_point_from_sha512,
             ),
         ),
@@ -163,37 +176,25 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_point::native_new_point_from_64_uniform_bytes,
             ),
         ),
         (
             "multi_scalar_mul_internal",
-            if timed_features.is_enabled(TimedFeatureFlag::Ristretto255NativeFloatingPointFix) {
-                make_safe_native(
-                    gas_params.clone(),
-                    timed_features.clone(),
-                    ristretto255_point::safe_native_multi_scalar_mul_no_floating_point,
-                )
-            } else {
-                // NOTE: We could not keep the old "unsafe" variant of this native because all the
-                // helper functions that the old "unsafe" native used were modified to return
-                // `SafeNativeResult`'s instead of `PartialVMResult`'s. This would've resulted in
-                // a lot of awkward error-handling, so we chose to simply make the native "safe".
-                //
-                // The only difference between this and the `safe_native_multi_scalar_mul_no_floating_point`
-                // from above, is this native still uses the flawed floating-point arithmetic gas formula.
-                make_safe_native(
-                    gas_params.clone(),
-                    timed_features.clone(),
-                    ristretto255_point::native_multi_scalar_mul,
-                )
-            },
+            make_safe_native(
+                gas_params.clone(),
+                timed_features.clone(),
+                features.clone(),
+                ristretto255_point::safe_native_multi_scalar_mul_no_floating_point,
+            ),
         ),
         (
             "scalar_is_canonical_internal",
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_scalar::native_scalar_is_canonical,
             ),
         ),
@@ -202,6 +203,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_scalar::native_scalar_invert,
             ),
         ),
@@ -210,6 +212,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_scalar::native_scalar_from_sha512,
             ),
         ),
@@ -218,6 +221,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_scalar::native_scalar_mul,
             ),
         ),
@@ -226,6 +230,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_scalar::native_scalar_add,
             ),
         ),
@@ -234,6 +239,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_scalar::native_scalar_sub,
             ),
         ),
@@ -242,6 +248,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_scalar::native_scalar_neg,
             ),
         ),
@@ -250,6 +257,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_scalar::native_scalar_from_u64,
             ),
         ),
@@ -258,6 +266,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_scalar::native_scalar_from_u128,
             ),
         ),
@@ -266,6 +275,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params.clone(),
                 timed_features.clone(),
+                features.clone(),
                 ristretto255_scalar::native_scalar_reduced_from_32_bytes,
             ),
         ),
@@ -274,6 +284,7 @@ pub fn make_all(
             make_safe_native(
                 gas_params,
                 timed_features,
+                features,
                 ristretto255_scalar::native_scalar_uniform_from_64_bytes,
             ),
         ),
@@ -300,7 +311,7 @@ pub fn pop_64_byte_slice(arguments: &mut VecDeque<Value>) -> SafeNativeResult<[u
     })
 }
 
-/// Pops a Scalar off the argument stack when the argument was a vector<u8>.
+/// Pops a Scalar off the argument stack when the argument was a `vector<u8>`.
 pub fn pop_scalar_from_bytes(arguments: &mut VecDeque<Value>) -> SafeNativeResult<Scalar> {
     let bytes = safely_pop_arg!(arguments, Vec<u8>);
 

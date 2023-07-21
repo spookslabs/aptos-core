@@ -1,12 +1,11 @@
-// Copyright (c) Aptos
+// Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::counters::{FETCHED_TRANSACTION, UNABLE_TO_FETCH_TRANSACTION};
 use aptos_api::Context;
 use aptos_api_types::{AsConverter, LedgerInfo, Transaction, TransactionOnChainData};
 use aptos_logger::prelude::*;
-use aptos_storage_interface::state_view::DbStateView;
-use aptos_vm::data_cache::StorageAdapterOwned;
+use aptos_vm::data_cache::AsMoveResolver;
 use futures::{channel::mpsc, SinkExt};
 use std::{sync::Arc, time::Duration};
 use tokio::task::JoinHandle;
@@ -46,7 +45,7 @@ impl Fetcher {
 
     pub fn set_highest_known_version(&mut self) -> anyhow::Result<()> {
         let info = self.context.get_latest_ledger_info_wrapped()?;
-        self.highest_known_version = info.ledger_version.0 as u64;
+        self.highest_known_version = info.ledger_version.0;
         self.chain_id = info.chain_id;
         Ok(())
     }
@@ -119,7 +118,7 @@ impl Fetcher {
                         highest_known_version,
                         num_transactions_to_fetch,
                     )
-                    .await
+                        .await
                 });
                 tasks.push(task);
                 starting_version += num_transactions_to_fetch as u64;
@@ -180,11 +179,8 @@ async fn fetch_raw_txns_with_retries(
 ) -> Vec<TransactionOnChainData> {
     let mut retries = 0;
     loop {
-        match context.get_transactions(
-            starting_version as u64,
-            num_transactions_to_fetch,
-            ledger_version as u64,
-        ) {
+        match context.get_transactions(starting_version, num_transactions_to_fetch, ledger_version)
+        {
             Ok(raw_txns) => return raw_txns,
             Err(err) => {
                 UNABLE_TO_FETCH_TRANSACTION.inc();
@@ -229,11 +225,11 @@ async fn fetch_nexts(
         num_transactions_to_fetch,
         3,
     )
-    .await;
+        .await;
 
     let (_, _, block_event) = context
         .db
-        .get_block_info_by_version(starting_version as u64)
+        .get_block_info_by_version(starting_version)
         .unwrap_or_else(|_| {
             panic!(
                 "Could not get block_info for start version {}",
@@ -246,7 +242,8 @@ async fn fetch_nexts(
     let mut block_height = block_event.height();
     let mut block_height_bcs = aptos_api_types::U64::from(block_height);
 
-    let resolver = context.move_resolver().unwrap();
+    let state_view = context.latest_state_view().unwrap();
+    let resolver = state_view.as_move_resolver();
     let converter = resolver.as_converter(context.db.clone());
 
     let mut transactions = vec![];
@@ -255,9 +252,7 @@ async fn fetch_nexts(
         // Do not update block_height if first block is block metadata
         if ind > 0 {
             // Update the timestamp if the next block occurs
-            if let aptos_types::transaction::Transaction::BlockMetadata(ref txn) =
-                raw_txn.transaction
-            {
+            if let Some(txn) = raw_txn.transaction.try_as_block_metadata() {
                 timestamp = txn.timestamp_usecs();
                 epoch = txn.epoch();
                 epoch_bcs = aptos_api_types::U64::from(epoch);
@@ -343,8 +338,8 @@ pub struct TransactionFetcherOptions {
 }
 
 fn default_if_zero<T>(value: Option<T>, default: T) -> T
-where
-    T: PartialEq + Copy + Default,
+    where
+        T: PartialEq + Copy + Default,
 {
     match value {
         Some(v) => {
@@ -398,7 +393,6 @@ pub struct TransactionFetcher {
     starting_version: u64,
     options: TransactionFetcherOptions,
     pub context: Arc<Context>,
-    pub resolver: Arc<StorageAdapterOwned<DbStateView>>,
     fetcher_handle: Option<JoinHandle<()>>,
     transactions_sender: Option<mpsc::Sender<Vec<Transaction>>>,
     transaction_receiver: mpsc::Receiver<Vec<Transaction>>,
@@ -407,7 +401,6 @@ pub struct TransactionFetcher {
 impl TransactionFetcher {
     pub fn new(
         context: Arc<Context>,
-        resolver: Arc<StorageAdapterOwned<DbStateView>>,
         starting_version: u64,
         options: TransactionFetcherOptions,
     ) -> Self {
@@ -418,7 +411,6 @@ impl TransactionFetcher {
             starting_version,
             options,
             context,
-            resolver,
             fetcher_handle: None,
             transactions_sender: Some(transactions_sender),
             transaction_receiver,
@@ -465,12 +457,8 @@ impl TransactionFetcherTrait for TransactionFetcher {
 
         let options2 = self.options.clone();
         let fetcher_handle = tokio::spawn(async move {
-            let mut fetcher = Fetcher::new(
-                context,
-                starting_version as u64,
-                options2,
-                transactions_sender,
-            );
+            let mut fetcher =
+                Fetcher::new(context, starting_version, options2, transactions_sender);
             fetcher.run().await;
         });
         self.fetcher_handle = Some(fetcher_handle);

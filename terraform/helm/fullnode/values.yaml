@@ -36,7 +36,6 @@ fullnode:
         identity: {}
         inbound_rate_limit_config:
         outbound_rate_limit_config:
-        max_inbound_connections: 100
 
 # -- Log level for the fullnode
 rust_log: info
@@ -140,10 +139,10 @@ backup_verify:
   resources:
     limits:
       cpu: 4
-      memory: 4Gi
+      memory: 8Gi
     requests:
       cpu: 4
-      memory: 4Gi
+      memory: 8Gi
   nodeSelector: {}
   tolerations: []
   affinity: {}

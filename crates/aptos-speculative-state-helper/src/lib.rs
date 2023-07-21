@@ -86,14 +86,14 @@ impl<E: Send + SpeculativeEvent + 'static> SpeculativeEvents<E> {
         Ok(())
     }
 
-    /// Logically clears events recorded so far for a given transaction.
+    /// Clears events recorded so far for a given transaction.
     pub fn clear_txn_events(&self, txn_idx: usize) -> anyhow::Result<()> {
         let events = self.events_with_checked_length(txn_idx + 1)?;
         events[txn_idx].lock().clear();
         Ok(())
     }
 
-    /// Logically clears all events.
+    /// Clears all events.
     pub fn clear_all_events(&self) {
         // TODO: Parallelize if needed.
         for event in &self.events {
@@ -101,10 +101,11 @@ impl<E: Send + SpeculativeEvent + 'static> SpeculativeEvents<E> {
         }
     }
 
-    /// Flush the stored events asynchronously by spawning global rayon threads.
-    pub fn flush(mut self) {
+    /// Flush the first num_to_flush stored events asynchronously by spawning global rayon threads.
+    pub fn flush(mut self, num_to_flush: usize) {
+        let to_flush = self.events.drain(..num_to_flush).collect::<Vec<_>>();
         rayon::spawn(move || {
-            self.events
+            to_flush
                 .into_par_iter()
                 .with_min_len(EVENT_DISPATCH_BATCH_SIZE)
                 .for_each(|m| {

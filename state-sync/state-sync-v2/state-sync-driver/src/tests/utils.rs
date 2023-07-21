@@ -8,7 +8,7 @@ use aptos_crypto::{
     ed25519::{Ed25519PrivateKey, Ed25519Signature},
     HashValue, PrivateKey, Uniform,
 };
-use aptos_data_client::GlobalDataSummary;
+use aptos_data_client::global_summary::GlobalDataSummary;
 use aptos_data_streaming_service::{
     data_notification::DataNotification, data_stream::DataStreamListener, streaming_client::Epoch,
 };
@@ -233,7 +233,7 @@ pub async fn verify_mempool_and_event_notification(
     let committed_transactions: Vec<CommittedTransaction> = expected_transactions
         .into_iter()
         .map(|txn| CommittedTransaction {
-            sender: txn.as_signed_user_txn().unwrap().sender(),
+            sender: txn.try_as_signed_user_txn().unwrap().sender(),
             sequence_number: 0,
         })
         .collect();

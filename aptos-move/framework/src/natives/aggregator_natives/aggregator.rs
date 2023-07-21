@@ -12,7 +12,7 @@ use crate::{
     safely_pop_arg,
 };
 use aptos_aggregator::aggregator_extension::AggregatorID;
-use aptos_types::on_chain_config::TimedFeatures;
+use aptos_types::on_chain_config::{Features, TimedFeatures};
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::native_functions::NativeFunction;
 use move_vm_types::{
@@ -20,7 +20,7 @@ use move_vm_types::{
     values::{Struct, StructRef, Value},
 };
 use smallvec::{smallvec, SmallVec};
-use std::collections::VecDeque;
+use std::{collections::VecDeque, sync::Arc};
 
 /***************************************************************************************************
  * native fun add(aggregator: &mut Aggregator, value: u128);
@@ -50,7 +50,12 @@ fn native_add(
     // Get aggregator.
     let aggregator_context = context.extensions().get::<NativeAggregatorContext>();
     let mut aggregator_data = aggregator_context.aggregator_data.borrow_mut();
-    let aggregator = aggregator_data.get_aggregator(id, limit);
+    let aggregator = aggregator_data.get_aggregator(
+        id,
+        limit,
+        aggregator_context.resolver,
+        aggregator_context.aggregator_enabled,
+    )?;
 
     aggregator.add(value)?;
 
@@ -84,7 +89,12 @@ fn native_read(
     // Get aggregator.
     let aggregator_context = context.extensions().get::<NativeAggregatorContext>();
     let mut aggregator_data = aggregator_context.aggregator_data.borrow_mut();
-    let aggregator = aggregator_data.get_aggregator(id, limit);
+    let aggregator = aggregator_data.get_aggregator(
+        id,
+        limit,
+        aggregator_context.resolver,
+        aggregator_context.aggregator_enabled,
+    )?;
 
     let value = aggregator.read_and_materialize(aggregator_context.resolver, &id)?;
 
@@ -119,7 +129,12 @@ fn native_sub(
     // Get aggregator.
     let aggregator_context = context.extensions().get::<NativeAggregatorContext>();
     let mut aggregator_data = aggregator_context.aggregator_data.borrow_mut();
-    let aggregator = aggregator_data.get_aggregator(id, limit);
+    let aggregator = aggregator_data.get_aggregator(
+        id,
+        limit,
+        aggregator_context.resolver,
+        aggregator_context.aggregator_enabled,
+    )?;
 
     aggregator.sub(value)?;
 
@@ -177,23 +192,39 @@ pub struct GasParameters {
 pub fn make_all(
     gas_params: GasParameters,
     timed_features: TimedFeatures,
+    features: Arc<Features>,
 ) -> impl Iterator<Item = (String, NativeFunction)> {
     let natives = [
         (
             "add",
-            make_safe_native(gas_params.add, timed_features.clone(), native_add),
+            make_safe_native(
+                gas_params.add,
+                timed_features.clone(),
+                features.clone(),
+                native_add,
+            ),
         ),
         (
             "read",
-            make_safe_native(gas_params.read, timed_features.clone(), native_read),
+            make_safe_native(
+                gas_params.read,
+                timed_features.clone(),
+                features.clone(),
+                native_read,
+            ),
         ),
         (
             "sub",
-            make_safe_native(gas_params.sub, timed_features.clone(), native_sub),
+            make_safe_native(
+                gas_params.sub,
+                timed_features.clone(),
+                features.clone(),
+                native_sub,
+            ),
         ),
         (
             "destroy",
-            make_safe_native(gas_params.destroy, timed_features, native_destroy),
+            make_safe_native(gas_params.destroy, timed_features, features, native_destroy),
         ),
     ];
 

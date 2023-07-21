@@ -11,9 +11,10 @@ use crate::{
     generate_error_response, generate_success_response,
     page::Page,
     response::{
-        api_disabled, transaction_not_found_by_hash, transaction_not_found_by_version,
-        BadRequestError, BasicError, BasicErrorWith404, BasicResponse, BasicResponseStatus,
-        BasicResult, BasicResultWith404, InsufficientStorageError, InternalError,
+        api_disabled, api_forbidden, transaction_not_found_by_hash,
+        transaction_not_found_by_version, BadRequestError, BasicError, BasicErrorWith404,
+        BasicResponse, BasicResponseStatus, BasicResult, BasicResultWith404,
+        InsufficientStorageError, InternalError,
     },
     ApiTags,
 };
@@ -37,7 +38,7 @@ use aptos_types::{
     },
     vm_status::StatusCode,
 };
-use aptos_vm::AptosVM;
+use aptos_vm::{data_cache::AsMoveResolver, AptosVM};
 use poem_openapi::{
     param::{Path, Query},
     payload::Json,
@@ -305,11 +306,11 @@ impl TransactionsApi {
                 )
             })?;
         fail_point_poem("endpoint_submit_transaction")?;
-        self.context
-            .check_api_output_enabled("Submit transaction", &accept_type)?;
         if !self.context.node_config.api.transaction_submission_enabled {
             return Err(api_disabled("Submit transaction"));
         }
+        self.context
+            .check_api_output_enabled("Submit transaction", &accept_type)?;
         let ledger_info = self.context.get_latest_ledger_info()?;
         let signed_transaction = self.get_signed_transaction(&ledger_info, data)?;
         self.create(&accept_type, &ledger_info, signed_transaction)
@@ -358,11 +359,11 @@ impl TransactionsApi {
                 )
             })?;
         fail_point_poem("endpoint_submit_batch_transactions")?;
-        self.context
-            .check_api_output_enabled("Submit batch transactions", &accept_type)?;
         if !self.context.node_config.api.transaction_submission_enabled {
             return Err(api_disabled("Submit batch transaction"));
         }
+        self.context
+            .check_api_output_enabled("Submit batch transactions", &accept_type)?;
         let ledger_info = self.context.get_latest_ledger_info()?;
         let signed_transactions_batch = self.get_signed_transactions_batch(&ledger_info, data)?;
         if self.context.max_submit_transaction_batch_size() < signed_transactions_batch.len() {
@@ -422,11 +423,11 @@ impl TransactionsApi {
                 )
             })?;
         fail_point_poem("endpoint_simulate_transaction")?;
-        self.context
-            .check_api_output_enabled("Simulate transaction", &accept_type)?;
         if !self.context.node_config.api.transaction_simulation_enabled {
             return Err(api_disabled("Simulate transaction"));
         }
+        self.context
+            .check_api_output_enabled("Simulate transaction", &accept_type)?;
         let ledger_info = self.context.get_latest_ledger_info()?;
         let mut signed_transaction = self.get_signed_transaction(&ledger_info, data)?;
 
@@ -562,22 +563,30 @@ impl TransactionsApi {
                 BasicError::bad_request_with_code_no_info(err, AptosErrorCode::InvalidInput)
             })?;
         fail_point_poem("endpoint_encode_submission")?;
+        if !self.context.node_config.api.encode_submission_enabled {
+            return Err(api_forbidden(
+                "Encode submission",
+                "Only JSON is supported as an AcceptType.",
+            ));
+        }
         self.context
             .check_api_output_enabled("Encode submission", &accept_type)?;
-        if !self.context.node_config.api.encode_submission_enabled {
-            return Err(api_disabled("Encode submission"));
-        }
         self.get_signing_message(&accept_type, data.0)
     }
 
     /// Estimate gas price
     ///
-    /// Currently, the gas estimation is handled by taking the median of the last 100,000 transactions
-    /// If a user wants to prioritize their transaction and is willing to pay, they can pay more
-    /// than the gas price.  If they're willing to wait longer, they can pay less.  Note that the
-    /// gas price moves with the fee market, and should only increase when demand outweighs supply.
+    /// Gives an estimate of the gas unit price required to get a transaction on chain in a
+    /// reasonable amount of time. The gas unit price is the amount that each transaction commits to
+    /// pay for each unit of gas consumed in executing the transaction. The estimate is based on
+    /// recent history: it gives the minimum gas that would have been required to get into recent
+    /// blocks, for blocks that were full. (When blocks are not full, the estimate will match the
+    /// minimum gas unit price.)
     ///
-    /// If there have been no transactions in the last 100,000 transactions, the price will be 1.
+    /// The estimation is given in three values: de-prioritized (low), regular, and prioritized
+    /// (aggressive). Using a more aggressive value increases the likelihood that the transaction
+    /// will make it into the next block; more aggressive values are computed with a larger history
+    /// and higher percentile statistics. More details are in AIP-34.
     #[oai(
         path = "/estimate_gas_price",
         method = "get",
@@ -711,7 +720,8 @@ impl TransactionsApi {
     ) -> BasicResultWith404<Transaction> {
         match accept_type {
             AcceptType::Json => {
-                let resolver = self.context.move_resolver_poem(ledger_info)?;
+                let state_view = self.context.latest_state_view_poem(ledger_info)?;
+                let resolver = state_view.as_move_resolver();
                 let transaction = match transaction_data {
                     TransactionData::OnChain(txn) => {
                         let timestamp =
@@ -892,7 +902,8 @@ impl TransactionsApi {
             },
             SubmitTransactionPost::Json(data) => self
                 .context
-                .move_resolver_poem(ledger_info)?
+                .latest_state_view_poem(ledger_info)?
+                .as_move_resolver()
                 .as_converter(self.context.db.clone())
                 .try_into_signed_transaction_poem(data.0, self.context.chain_id())
                 .context("Failed to create SignedTransaction from SubmitTransactionRequest")
@@ -971,7 +982,7 @@ impl TransactionsApi {
                 .enumerate()
                 .map(|(index, txn)| {
                     self.context
-                        .move_resolver_poem(ledger_info)?
+                        .latest_state_view_poem(ledger_info)?.as_move_resolver()
                         .as_converter(self.context.db.clone())
                         .try_into_signed_transaction_poem(txn, self.context.chain_id())
                         .context(format!("Failed to create SignedTransaction from SubmitTransactionRequest at position {}", index))
@@ -1049,9 +1060,9 @@ impl TransactionsApi {
         match self.create_internal(txn.clone()).await {
             Ok(()) => match accept_type {
                 AcceptType::Json => {
-                    let resolver = self
+                    let state_view = self
                         .context
-                        .move_resolver()
+                        .latest_state_view()
                         .context("Failed to read latest state checkpoint from DB")
                         .map_err(|e| {
                             SubmitTransactionError::internal_with_code(
@@ -1060,6 +1071,7 @@ impl TransactionsApi {
                                 ledger_info,
                             )
                         })?;
+                    let resolver = state_view.as_move_resolver();
 
                     // We provide the pending transaction so that users have the hash associated
                     let pending_txn = resolver
@@ -1168,7 +1180,8 @@ impl TransactionsApi {
         }
 
         // Simulate transaction
-        let move_resolver = self.context.move_resolver_poem(&ledger_info)?;
+        let state_view = self.context.latest_state_view_poem(&ledger_info)?;
+        let move_resolver = state_view.as_move_resolver();
         let (_, output_ext) = AptosVM::simulate_signed_transaction(&txn, &move_resolver);
         let version = ledger_info.version();
 
@@ -1254,7 +1267,8 @@ impl TransactionsApi {
         }
 
         let ledger_info = self.context.get_latest_ledger_info()?;
-        let resolver = self.context.move_resolver_poem(&ledger_info)?;
+        let state_view = self.context.latest_state_view_poem(&ledger_info)?;
+        let resolver = state_view.as_move_resolver();
         let raw_txn: RawTransaction = resolver
             .as_converter(self.context.db.clone())
             .try_into_raw_transaction_poem(request.transaction, self.context.chain_id())

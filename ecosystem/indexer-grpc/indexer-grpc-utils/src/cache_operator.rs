@@ -2,12 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::constants::BLOB_STORAGE_SIZE;
-use redis::{AsyncCommands, RedisError};
+use redis::{AsyncCommands, RedisError, RedisResult};
 
 // Configurations for cache.
-// The cache size is estimated to be 10M transactions.
-// (TODO): better huristic to estimate the cache size.
-const CACHE_SIZE_ESTIMATION: u64 = 10_000_000_u64;
+// The cache size is estimated to be 3M transactions.
+// For 3M transactions, the cache size is about 25GB.
+// At TPS 20k, it takes about 2.5 minutes to fill up the cache.
+const CACHE_SIZE_ESTIMATION: u64 = 3_000_000_u64;
+
+// Hard limit for cache lower bound. Only used for active eviction.
+// Cache worker actively evicts the cache entries if the cache entry version is
+// lower than the latest version - CACHE_SIZE_EVICTION_LOWER_BOUND.
+// The gap between CACHE_SIZE_ESTIMATION and this is to give buffer since
+// reading latest version and actual data not atomic(two operations).
+const CACHE_SIZE_EVICTION_LOWER_BOUND: u64 = 12_000_000_u64;
 
 // Keys for cache.
 const CACHE_KEY_LATEST_VERSION: &str = "latest_version";
@@ -110,16 +118,15 @@ impl<T: redis::aio::ConnectionLike + Send> CacheOperator<T> {
 
     // Set up the cache if needed.
     pub async fn cache_setup_if_needed(&mut self) -> bool {
-        let version_inserted: bool = self
-            .conn
-            .set_nx::<&str, &str, bool>(
-                CACHE_KEY_LATEST_VERSION,
-                CACHE_DEFAULT_LATEST_VERSION_NUMBER,
-            )
+        let version_inserted: bool = redis::cmd("SET")
+            .arg(CACHE_KEY_LATEST_VERSION)
+            .arg(CACHE_DEFAULT_LATEST_VERSION_NUMBER)
+            .arg("NX")
+            .query_async(&mut self.conn)
             .await
             .expect("Redis latest_version check failed.");
         if version_inserted {
-            aptos_logger::info!(
+            tracing::info!(
                 initialized_latest_version = CACHE_DEFAULT_LATEST_VERSION_NUMBER,
                 "Cache latest version is initialized."
             );
@@ -180,21 +187,34 @@ impl<T: redis::aio::ConnectionLike + Send> CacheOperator<T> {
         }
     }
 
-    pub async fn update_cache_transaction(
+    pub async fn update_cache_transactions(
         &mut self,
-        version: u64,
-        encoded_proto_data: String,
-        timestamp_in_seconds: u64,
+        transactions: Vec<(u64, String, u64)>,
     ) -> anyhow::Result<()> {
-        match self
-            .conn
-            .set_ex::<String, String, String>(
-                version.to_string(),
-                encoded_proto_data,
-                get_ttl_in_seconds(timestamp_in_seconds) as usize,
-            )
-            .await
-        {
+        let mut redis_pipeline = redis::pipe();
+        for (version, encoded_proto_data, timestamp_in_seconds) in transactions {
+            redis_pipeline
+                .cmd("SET")
+                .arg(version)
+                .arg(encoded_proto_data)
+                .arg("EX")
+                .arg(get_ttl_in_seconds(timestamp_in_seconds))
+                .ignore();
+            // Actively evict the expired cache. This is to avoid using Redis
+            // eviction policy, which is probabilistic-based and may evict the
+            // cache that is still needed.
+            if version >= CACHE_SIZE_EVICTION_LOWER_BOUND {
+                redis_pipeline
+                    .cmd("DEL")
+                    .arg(version - CACHE_SIZE_EVICTION_LOWER_BOUND)
+                    .ignore();
+            }
+        }
+
+        let redis_result: RedisResult<()> =
+            redis_pipeline.query_async::<_, _>(&mut self.conn).await;
+
+        match redis_result {
             Ok(_) => Ok(()),
             Err(err) => Err(err.into()),
         }
@@ -207,7 +227,7 @@ impl<T: redis::aio::ConnectionLike + Send> CacheOperator<T> {
         version: u64,
     ) -> anyhow::Result<()> {
         let script = redis::Script::new(CACHE_SCRIPT_UPDATE_LATEST_VERSION);
-        aptos_logger::info!(
+        tracing::info!(
             num_of_versions = num_of_versions,
             version = version,
             "Updating latest version in cache."
@@ -221,7 +241,7 @@ impl<T: redis::aio::ConnectionLike + Send> CacheOperator<T> {
             .expect("Redis latest version update failed.")
         {
             2 => {
-                aptos_logger::error!(version=version, "Redis latest version update failed. The version is beyond the next expected version.");
+                tracing::error!(version=version, "Redis latest version update failed. The version is beyond the next expected version.");
                 panic!("version is not right.");
             },
             _ => Ok(()),
@@ -261,9 +281,10 @@ mod tests {
     async fn cache_is_setup_if_empty() {
         // Key doesn't exists and SET_NX returns 1.
         let cmds = vec![MockCmd::new(
-            redis::cmd("SETNX")
+            redis::cmd("SET")
                 .arg(CACHE_KEY_LATEST_VERSION)
-                .arg(CACHE_DEFAULT_LATEST_VERSION_NUMBER),
+                .arg(CACHE_DEFAULT_LATEST_VERSION_NUMBER)
+                .arg("NX"),
             Ok("1"),
         )];
         let mock_connection = MockRedisConnection::new(cmds);
@@ -276,9 +297,10 @@ mod tests {
     #[tokio::test]
     async fn cache_is_setup_if_not_empty() {
         let cmds = vec![MockCmd::new(
-            redis::cmd("SETNX")
+            redis::cmd("SET")
                 .arg(CACHE_KEY_LATEST_VERSION)
-                .arg(CACHE_DEFAULT_LATEST_VERSION_NUMBER),
+                .arg(CACHE_DEFAULT_LATEST_VERSION_NUMBER)
+                .arg("NX"),
             Ok("0"),
         )];
         let mock_connection = MockRedisConnection::new(cmds);

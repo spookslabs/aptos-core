@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{KnownAttribute, RuntimeModuleMetadataV1};
-use move_binary_format::file_format::{Ability, AbilitySet};
+use move_binary_format::file_format::{Ability, AbilitySet, Visibility};
 use move_core_types::{
     account_address::AccountAddress,
     errmap::{ErrorDescription, ErrorMapping},
@@ -12,8 +12,8 @@ use move_core_types::{
 use move_model::{
     ast::{Attribute, AttributeValue, Value},
     model::{
-        FunctionEnv, FunctionVisibility, GlobalEnv, Loc, ModuleEnv, NamedConstantEnv, Parameter,
-        QualifiedId, StructEnv, StructId,
+        FunctionEnv, GlobalEnv, Loc, ModuleEnv, NamedConstantEnv, Parameter, QualifiedId,
+        StructEnv, StructId,
     },
     symbol::Symbol,
     ty::{PrimitiveType, Type},
@@ -82,7 +82,7 @@ impl<'a> ExtendedChecker<'a> {
         // TODO: also enable init_module by attribute, perhaps deprecate by name
         let init_module_sym = self.env.symbol_pool().make(INIT_MODULE_FUN);
         if let Some(ref fun) = module.find_function(init_module_sym) {
-            if fun.visibility() != FunctionVisibility::Private {
+            if fun.visibility() != Visibility::Private {
                 self.env
                     .error(&fun.get_loc(), "`init_module` function must be private")
             }
@@ -167,7 +167,15 @@ impl<'a> ExtendedChecker<'a> {
 
     fn is_allowed_input_struct(&self, qid: QualifiedId<StructId>) -> bool {
         let name = self.env.get_struct(qid).get_full_name_with_address();
-        matches!(name.as_str(), "0x1::string::String")
+        // TODO(gerben) find a nice way to keep this in sync with allowed_structs in aptos-vm
+        matches!(
+            name.as_str(),
+            "0x1::string::String"
+                | "0x1::object::Object"
+                | "0x1::option::Option"
+                | "0x1::fixed_point32::FixedPoint32"
+                | "0x1::fixed_point64::FixedPoint64"
+        )
     }
 }
 
@@ -436,7 +444,7 @@ impl<'a> ExtendedChecker<'a> {
                 if let Some(abort_code) = self.get_abort_code(&named_constant) {
                     // If an error is returned (because of duplicate entry) ignore it.
                     let _ = error_map.add_module_error(
-                        module_id.clone(),
+                        &module_id.to_string(),
                         abort_code,
                         ErrorDescription {
                             code_name: name.trim().to_string(),
@@ -449,7 +457,7 @@ impl<'a> ExtendedChecker<'a> {
         // Inject it into runtime info
         self.output.entry(module_id).or_default().error_map = error_map
             .module_error_maps
-            .remove(&module_id)
+            .remove(&module_id.to_string())
             .unwrap_or_default();
     }
 
@@ -477,7 +485,9 @@ impl<'a> ExtendedChecker<'a> {
 
     fn get_runtime_module_id(&self, module: &ModuleEnv<'_>) -> ModuleId {
         let name = module.get_name();
-        let addr = AccountAddress::from_hex_literal(&format!("0x{:x}", name.addr())).unwrap();
+        let addr =
+            AccountAddress::from_hex_literal(&format!("0x{:x}", name.addr().expect_numerical()))
+                .unwrap();
         let name = Identifier::new(self.name_string(name.name()).to_string()).unwrap();
         ModuleId::new(addr, name)
     }

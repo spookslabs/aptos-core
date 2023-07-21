@@ -137,8 +137,9 @@ impl serde::Serialize for account_signature::Type {
         S: serde::Serializer,
     {
         let variant = match self {
-            Self::Ed25519 => "ED25519",
-            Self::MultiEd25519 => "MULTI_ED25519",
+            Self::Unspecified => "TYPE_UNSPECIFIED",
+            Self::Ed25519 => "TYPE_ED25519",
+            Self::MultiEd25519 => "TYPE_MULTI_ED25519",
         };
         serializer.serialize_str(variant)
     }
@@ -150,8 +151,9 @@ impl<'de> serde::Deserialize<'de> for account_signature::Type {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "ED25519",
-            "MULTI_ED25519",
+            "TYPE_UNSPECIFIED",
+            "TYPE_ED25519",
+            "TYPE_MULTI_ED25519",
         ];
 
         struct GeneratedVisitor;
@@ -194,8 +196,9 @@ impl<'de> serde::Deserialize<'de> for account_signature::Type {
                 E: serde::de::Error,
             {
                 match value {
-                    "ED25519" => Ok(account_signature::Type::Ed25519),
-                    "MULTI_ED25519" => Ok(account_signature::Type::MultiEd25519),
+                    "TYPE_UNSPECIFIED" => Ok(account_signature::Type::Unspecified),
+                    "TYPE_ED25519" => Ok(account_signature::Type::Ed25519),
+                    "TYPE_MULTI_ED25519" => Ok(account_signature::Type::MultiEd25519),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }
@@ -1410,6 +1413,9 @@ impl serde::Serialize for EntryFunctionPayload {
         if !self.arguments.is_empty() {
             len += 1;
         }
+        if !self.entry_function_id_str.is_empty() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("aptos.transaction.v1.EntryFunctionPayload", len)?;
         if let Some(v) = self.function.as_ref() {
             struct_ser.serialize_field("function", v)?;
@@ -1419,6 +1425,9 @@ impl serde::Serialize for EntryFunctionPayload {
         }
         if !self.arguments.is_empty() {
             struct_ser.serialize_field("arguments", &self.arguments)?;
+        }
+        if !self.entry_function_id_str.is_empty() {
+            struct_ser.serialize_field("entryFunctionIdStr", &self.entry_function_id_str)?;
         }
         struct_ser.end()
     }
@@ -1434,6 +1443,8 @@ impl<'de> serde::Deserialize<'de> for EntryFunctionPayload {
             "type_arguments",
             "typeArguments",
             "arguments",
+            "entry_function_id_str",
+            "entryFunctionIdStr",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -1441,6 +1452,7 @@ impl<'de> serde::Deserialize<'de> for EntryFunctionPayload {
             Function,
             TypeArguments,
             Arguments,
+            EntryFunctionIdStr,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -1465,6 +1477,7 @@ impl<'de> serde::Deserialize<'de> for EntryFunctionPayload {
                             "function" => Ok(GeneratedField::Function),
                             "typeArguments" | "type_arguments" => Ok(GeneratedField::TypeArguments),
                             "arguments" => Ok(GeneratedField::Arguments),
+                            "entryFunctionIdStr" | "entry_function_id_str" => Ok(GeneratedField::EntryFunctionIdStr),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -1487,6 +1500,7 @@ impl<'de> serde::Deserialize<'de> for EntryFunctionPayload {
                 let mut function__ = None;
                 let mut type_arguments__ = None;
                 let mut arguments__ = None;
+                let mut entry_function_id_str__ = None;
                 while let Some(k) = map.next_key()? {
                     match k {
                         GeneratedField::Function => {
@@ -1507,12 +1521,19 @@ impl<'de> serde::Deserialize<'de> for EntryFunctionPayload {
                             }
                             arguments__ = Some(map.next_value()?);
                         }
+                        GeneratedField::EntryFunctionIdStr => {
+                            if entry_function_id_str__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("entryFunctionIdStr"));
+                            }
+                            entry_function_id_str__ = Some(map.next_value()?);
+                        }
                     }
                 }
                 Ok(EntryFunctionPayload {
                     function: function__,
                     type_arguments: type_arguments__.unwrap_or_default(),
                     arguments: arguments__.unwrap_or_default(),
+                    entry_function_id_str: entry_function_id_str__.unwrap_or_default(),
                 })
             }
         }
@@ -2000,10 +2021,11 @@ impl serde::Serialize for MoveAbility {
         S: serde::Serializer,
     {
         let variant = match self {
-            Self::Copy => "COPY",
-            Self::Drop => "DROP",
-            Self::Store => "STORE",
-            Self::Key => "KEY",
+            Self::Unspecified => "MOVE_ABILITY_UNSPECIFIED",
+            Self::Copy => "MOVE_ABILITY_COPY",
+            Self::Drop => "MOVE_ABILITY_DROP",
+            Self::Store => "MOVE_ABILITY_STORE",
+            Self::Key => "MOVE_ABILITY_KEY",
         };
         serializer.serialize_str(variant)
     }
@@ -2015,10 +2037,11 @@ impl<'de> serde::Deserialize<'de> for MoveAbility {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "COPY",
-            "DROP",
-            "STORE",
-            "KEY",
+            "MOVE_ABILITY_UNSPECIFIED",
+            "MOVE_ABILITY_COPY",
+            "MOVE_ABILITY_DROP",
+            "MOVE_ABILITY_STORE",
+            "MOVE_ABILITY_KEY",
         ];
 
         struct GeneratedVisitor;
@@ -2061,10 +2084,11 @@ impl<'de> serde::Deserialize<'de> for MoveAbility {
                 E: serde::de::Error,
             {
                 match value {
-                    "COPY" => Ok(MoveAbility::Copy),
-                    "DROP" => Ok(MoveAbility::Drop),
-                    "STORE" => Ok(MoveAbility::Store),
-                    "KEY" => Ok(MoveAbility::Key),
+                    "MOVE_ABILITY_UNSPECIFIED" => Ok(MoveAbility::Unspecified),
+                    "MOVE_ABILITY_COPY" => Ok(MoveAbility::Copy),
+                    "MOVE_ABILITY_DROP" => Ok(MoveAbility::Drop),
+                    "MOVE_ABILITY_STORE" => Ok(MoveAbility::Store),
+                    "MOVE_ABILITY_KEY" => Ok(MoveAbility::Key),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }
@@ -2259,9 +2283,10 @@ impl serde::Serialize for move_function::Visibility {
         S: serde::Serializer,
     {
         let variant = match self {
-            Self::Private => "PRIVATE",
-            Self::Public => "PUBLIC",
-            Self::Friend => "FRIEND",
+            Self::Unspecified => "VISIBILITY_UNSPECIFIED",
+            Self::Private => "VISIBILITY_PRIVATE",
+            Self::Public => "VISIBILITY_PUBLIC",
+            Self::Friend => "VISIBILITY_FRIEND",
         };
         serializer.serialize_str(variant)
     }
@@ -2273,9 +2298,10 @@ impl<'de> serde::Deserialize<'de> for move_function::Visibility {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "PRIVATE",
-            "PUBLIC",
-            "FRIEND",
+            "VISIBILITY_UNSPECIFIED",
+            "VISIBILITY_PRIVATE",
+            "VISIBILITY_PUBLIC",
+            "VISIBILITY_FRIEND",
         ];
 
         struct GeneratedVisitor;
@@ -2318,9 +2344,10 @@ impl<'de> serde::Deserialize<'de> for move_function::Visibility {
                 E: serde::de::Error,
             {
                 match value {
-                    "PRIVATE" => Ok(move_function::Visibility::Private),
-                    "PUBLIC" => Ok(move_function::Visibility::Public),
-                    "FRIEND" => Ok(move_function::Visibility::Friend),
+                    "VISIBILITY_UNSPECIFIED" => Ok(move_function::Visibility::Unspecified),
+                    "VISIBILITY_PRIVATE" => Ok(move_function::Visibility::Private),
+                    "VISIBILITY_PUBLIC" => Ok(move_function::Visibility::Public),
+                    "VISIBILITY_FRIEND" => Ok(move_function::Visibility::Friend),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }
@@ -3721,20 +3748,21 @@ impl serde::Serialize for MoveTypes {
         S: serde::Serializer,
     {
         let variant = match self {
-            Self::Bool => "Bool",
-            Self::U8 => "U8",
-            Self::U16 => "U16",
-            Self::U32 => "U32",
-            Self::U64 => "U64",
-            Self::U128 => "U128",
-            Self::U256 => "U256",
-            Self::Address => "Address",
-            Self::Signer => "Signer",
-            Self::Vector => "Vector",
-            Self::Struct => "Struct",
-            Self::GenericTypeParam => "GenericTypeParam",
-            Self::Reference => "Reference",
-            Self::Unparsable => "Unparsable",
+            Self::Unspecified => "MOVE_TYPES_UNSPECIFIED",
+            Self::Bool => "MOVE_TYPES_BOOL",
+            Self::U8 => "MOVE_TYPES_U8",
+            Self::U16 => "MOVE_TYPES_U16",
+            Self::U32 => "MOVE_TYPES_U32",
+            Self::U64 => "MOVE_TYPES_U64",
+            Self::U128 => "MOVE_TYPES_U128",
+            Self::U256 => "MOVE_TYPES_U256",
+            Self::Address => "MOVE_TYPES_ADDRESS",
+            Self::Signer => "MOVE_TYPES_SIGNER",
+            Self::Vector => "MOVE_TYPES_VECTOR",
+            Self::Struct => "MOVE_TYPES_STRUCT",
+            Self::GenericTypeParam => "MOVE_TYPES_GENERIC_TYPE_PARAM",
+            Self::Reference => "MOVE_TYPES_REFERENCE",
+            Self::Unparsable => "MOVE_TYPES_UNPARSABLE",
         };
         serializer.serialize_str(variant)
     }
@@ -3746,20 +3774,21 @@ impl<'de> serde::Deserialize<'de> for MoveTypes {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "Bool",
-            "U8",
-            "U16",
-            "U32",
-            "U64",
-            "U128",
-            "U256",
-            "Address",
-            "Signer",
-            "Vector",
-            "Struct",
-            "GenericTypeParam",
-            "Reference",
-            "Unparsable",
+            "MOVE_TYPES_UNSPECIFIED",
+            "MOVE_TYPES_BOOL",
+            "MOVE_TYPES_U8",
+            "MOVE_TYPES_U16",
+            "MOVE_TYPES_U32",
+            "MOVE_TYPES_U64",
+            "MOVE_TYPES_U128",
+            "MOVE_TYPES_U256",
+            "MOVE_TYPES_ADDRESS",
+            "MOVE_TYPES_SIGNER",
+            "MOVE_TYPES_VECTOR",
+            "MOVE_TYPES_STRUCT",
+            "MOVE_TYPES_GENERIC_TYPE_PARAM",
+            "MOVE_TYPES_REFERENCE",
+            "MOVE_TYPES_UNPARSABLE",
         ];
 
         struct GeneratedVisitor;
@@ -3802,20 +3831,21 @@ impl<'de> serde::Deserialize<'de> for MoveTypes {
                 E: serde::de::Error,
             {
                 match value {
-                    "Bool" => Ok(MoveTypes::Bool),
-                    "U8" => Ok(MoveTypes::U8),
-                    "U16" => Ok(MoveTypes::U16),
-                    "U32" => Ok(MoveTypes::U32),
-                    "U64" => Ok(MoveTypes::U64),
-                    "U128" => Ok(MoveTypes::U128),
-                    "U256" => Ok(MoveTypes::U256),
-                    "Address" => Ok(MoveTypes::Address),
-                    "Signer" => Ok(MoveTypes::Signer),
-                    "Vector" => Ok(MoveTypes::Vector),
-                    "Struct" => Ok(MoveTypes::Struct),
-                    "GenericTypeParam" => Ok(MoveTypes::GenericTypeParam),
-                    "Reference" => Ok(MoveTypes::Reference),
-                    "Unparsable" => Ok(MoveTypes::Unparsable),
+                    "MOVE_TYPES_UNSPECIFIED" => Ok(MoveTypes::Unspecified),
+                    "MOVE_TYPES_BOOL" => Ok(MoveTypes::Bool),
+                    "MOVE_TYPES_U8" => Ok(MoveTypes::U8),
+                    "MOVE_TYPES_U16" => Ok(MoveTypes::U16),
+                    "MOVE_TYPES_U32" => Ok(MoveTypes::U32),
+                    "MOVE_TYPES_U64" => Ok(MoveTypes::U64),
+                    "MOVE_TYPES_U128" => Ok(MoveTypes::U128),
+                    "MOVE_TYPES_U256" => Ok(MoveTypes::U256),
+                    "MOVE_TYPES_ADDRESS" => Ok(MoveTypes::Address),
+                    "MOVE_TYPES_SIGNER" => Ok(MoveTypes::Signer),
+                    "MOVE_TYPES_VECTOR" => Ok(MoveTypes::Vector),
+                    "MOVE_TYPES_STRUCT" => Ok(MoveTypes::Struct),
+                    "MOVE_TYPES_GENERIC_TYPE_PARAM" => Ok(MoveTypes::GenericTypeParam),
+                    "MOVE_TYPES_REFERENCE" => Ok(MoveTypes::Reference),
+                    "MOVE_TYPES_UNPARSABLE" => Ok(MoveTypes::Unparsable),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }
@@ -4338,7 +4368,8 @@ impl serde::Serialize for multisig_transaction_payload::Type {
         S: serde::Serializer,
     {
         let variant = match self {
-            Self::EntryFunctionPayload => "ENTRY_FUNCTION_PAYLOAD",
+            Self::Unspecified => "TYPE_UNSPECIFIED",
+            Self::EntryFunctionPayload => "TYPE_ENTRY_FUNCTION_PAYLOAD",
         };
         serializer.serialize_str(variant)
     }
@@ -4350,7 +4381,8 @@ impl<'de> serde::Deserialize<'de> for multisig_transaction_payload::Type {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "ENTRY_FUNCTION_PAYLOAD",
+            "TYPE_UNSPECIFIED",
+            "TYPE_ENTRY_FUNCTION_PAYLOAD",
         ];
 
         struct GeneratedVisitor;
@@ -4393,7 +4425,8 @@ impl<'de> serde::Deserialize<'de> for multisig_transaction_payload::Type {
                 E: serde::de::Error,
             {
                 match value {
-                    "ENTRY_FUNCTION_PAYLOAD" => Ok(multisig_transaction_payload::Type::EntryFunctionPayload),
+                    "TYPE_UNSPECIFIED" => Ok(multisig_transaction_payload::Type::Unspecified),
+                    "TYPE_ENTRY_FUNCTION_PAYLOAD" => Ok(multisig_transaction_payload::Type::EntryFunctionPayload),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }
@@ -4786,9 +4819,10 @@ impl serde::Serialize for signature::Type {
         S: serde::Serializer,
     {
         let variant = match self {
-            Self::Ed25519 => "ED25519",
-            Self::MultiEd25519 => "MULTI_ED25519",
-            Self::MultiAgent => "MULTI_AGENT",
+            Self::Unspecified => "TYPE_UNSPECIFIED",
+            Self::Ed25519 => "TYPE_ED25519",
+            Self::MultiEd25519 => "TYPE_MULTI_ED25519",
+            Self::MultiAgent => "TYPE_MULTI_AGENT",
         };
         serializer.serialize_str(variant)
     }
@@ -4800,9 +4834,10 @@ impl<'de> serde::Deserialize<'de> for signature::Type {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "ED25519",
-            "MULTI_ED25519",
-            "MULTI_AGENT",
+            "TYPE_UNSPECIFIED",
+            "TYPE_ED25519",
+            "TYPE_MULTI_ED25519",
+            "TYPE_MULTI_AGENT",
         ];
 
         struct GeneratedVisitor;
@@ -4845,9 +4880,10 @@ impl<'de> serde::Deserialize<'de> for signature::Type {
                 E: serde::de::Error,
             {
                 match value {
-                    "ED25519" => Ok(signature::Type::Ed25519),
-                    "MULTI_ED25519" => Ok(signature::Type::MultiEd25519),
-                    "MULTI_AGENT" => Ok(signature::Type::MultiAgent),
+                    "TYPE_UNSPECIFIED" => Ok(signature::Type::Unspecified),
+                    "TYPE_ED25519" => Ok(signature::Type::Ed25519),
+                    "TYPE_MULTI_ED25519" => Ok(signature::Type::MultiEd25519),
+                    "TYPE_MULTI_AGENT" => Ok(signature::Type::MultiAgent),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }
@@ -5181,10 +5217,11 @@ impl serde::Serialize for transaction::TransactionType {
         S: serde::Serializer,
     {
         let variant = match self {
-            Self::Genesis => "GENESIS",
-            Self::BlockMetadata => "BLOCK_METADATA",
-            Self::StateCheckpoint => "STATE_CHECKPOINT",
-            Self::User => "USER",
+            Self::Unspecified => "TRANSACTION_TYPE_UNSPECIFIED",
+            Self::Genesis => "TRANSACTION_TYPE_GENESIS",
+            Self::BlockMetadata => "TRANSACTION_TYPE_BLOCK_METADATA",
+            Self::StateCheckpoint => "TRANSACTION_TYPE_STATE_CHECKPOINT",
+            Self::User => "TRANSACTION_TYPE_USER",
         };
         serializer.serialize_str(variant)
     }
@@ -5196,10 +5233,11 @@ impl<'de> serde::Deserialize<'de> for transaction::TransactionType {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "GENESIS",
-            "BLOCK_METADATA",
-            "STATE_CHECKPOINT",
-            "USER",
+            "TRANSACTION_TYPE_UNSPECIFIED",
+            "TRANSACTION_TYPE_GENESIS",
+            "TRANSACTION_TYPE_BLOCK_METADATA",
+            "TRANSACTION_TYPE_STATE_CHECKPOINT",
+            "TRANSACTION_TYPE_USER",
         ];
 
         struct GeneratedVisitor;
@@ -5242,10 +5280,11 @@ impl<'de> serde::Deserialize<'de> for transaction::TransactionType {
                 E: serde::de::Error,
             {
                 match value {
-                    "GENESIS" => Ok(transaction::TransactionType::Genesis),
-                    "BLOCK_METADATA" => Ok(transaction::TransactionType::BlockMetadata),
-                    "STATE_CHECKPOINT" => Ok(transaction::TransactionType::StateCheckpoint),
-                    "USER" => Ok(transaction::TransactionType::User),
+                    "TRANSACTION_TYPE_UNSPECIFIED" => Ok(transaction::TransactionType::Unspecified),
+                    "TRANSACTION_TYPE_GENESIS" => Ok(transaction::TransactionType::Genesis),
+                    "TRANSACTION_TYPE_BLOCK_METADATA" => Ok(transaction::TransactionType::BlockMetadata),
+                    "TRANSACTION_TYPE_STATE_CHECKPOINT" => Ok(transaction::TransactionType::StateCheckpoint),
+                    "TRANSACTION_TYPE_USER" => Ok(transaction::TransactionType::User),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }
@@ -5677,11 +5716,12 @@ impl serde::Serialize for transaction_payload::Type {
         S: serde::Serializer,
     {
         let variant = match self {
-            Self::EntryFunctionPayload => "ENTRY_FUNCTION_PAYLOAD",
-            Self::ScriptPayload => "SCRIPT_PAYLOAD",
-            Self::ModuleBundlePayload => "MODULE_BUNDLE_PAYLOAD",
-            Self::WriteSetPayload => "WRITE_SET_PAYLOAD",
-            Self::MultisigPayload => "MULTISIG_PAYLOAD",
+            Self::Unspecified => "TYPE_UNSPECIFIED",
+            Self::EntryFunctionPayload => "TYPE_ENTRY_FUNCTION_PAYLOAD",
+            Self::ScriptPayload => "TYPE_SCRIPT_PAYLOAD",
+            Self::ModuleBundlePayload => "TYPE_MODULE_BUNDLE_PAYLOAD",
+            Self::WriteSetPayload => "TYPE_WRITE_SET_PAYLOAD",
+            Self::MultisigPayload => "TYPE_MULTISIG_PAYLOAD",
         };
         serializer.serialize_str(variant)
     }
@@ -5693,11 +5733,12 @@ impl<'de> serde::Deserialize<'de> for transaction_payload::Type {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "ENTRY_FUNCTION_PAYLOAD",
-            "SCRIPT_PAYLOAD",
-            "MODULE_BUNDLE_PAYLOAD",
-            "WRITE_SET_PAYLOAD",
-            "MULTISIG_PAYLOAD",
+            "TYPE_UNSPECIFIED",
+            "TYPE_ENTRY_FUNCTION_PAYLOAD",
+            "TYPE_SCRIPT_PAYLOAD",
+            "TYPE_MODULE_BUNDLE_PAYLOAD",
+            "TYPE_WRITE_SET_PAYLOAD",
+            "TYPE_MULTISIG_PAYLOAD",
         ];
 
         struct GeneratedVisitor;
@@ -5740,11 +5781,12 @@ impl<'de> serde::Deserialize<'de> for transaction_payload::Type {
                 E: serde::de::Error,
             {
                 match value {
-                    "ENTRY_FUNCTION_PAYLOAD" => Ok(transaction_payload::Type::EntryFunctionPayload),
-                    "SCRIPT_PAYLOAD" => Ok(transaction_payload::Type::ScriptPayload),
-                    "MODULE_BUNDLE_PAYLOAD" => Ok(transaction_payload::Type::ModuleBundlePayload),
-                    "WRITE_SET_PAYLOAD" => Ok(transaction_payload::Type::WriteSetPayload),
-                    "MULTISIG_PAYLOAD" => Ok(transaction_payload::Type::MultisigPayload),
+                    "TYPE_UNSPECIFIED" => Ok(transaction_payload::Type::Unspecified),
+                    "TYPE_ENTRY_FUNCTION_PAYLOAD" => Ok(transaction_payload::Type::EntryFunctionPayload),
+                    "TYPE_SCRIPT_PAYLOAD" => Ok(transaction_payload::Type::ScriptPayload),
+                    "TYPE_MODULE_BUNDLE_PAYLOAD" => Ok(transaction_payload::Type::ModuleBundlePayload),
+                    "TYPE_WRITE_SET_PAYLOAD" => Ok(transaction_payload::Type::WriteSetPayload),
+                    "TYPE_MULTISIG_PAYLOAD" => Ok(transaction_payload::Type::MultisigPayload),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }
@@ -6492,8 +6534,9 @@ impl serde::Serialize for write_set::WriteSetType {
         S: serde::Serializer,
     {
         let variant = match self {
-            Self::ScriptWriteSet => "SCRIPT_WRITE_SET",
-            Self::DirectWriteSet => "DIRECT_WRITE_SET",
+            Self::Unspecified => "WRITE_SET_TYPE_UNSPECIFIED",
+            Self::ScriptWriteSet => "WRITE_SET_TYPE_SCRIPT_WRITE_SET",
+            Self::DirectWriteSet => "WRITE_SET_TYPE_DIRECT_WRITE_SET",
         };
         serializer.serialize_str(variant)
     }
@@ -6505,8 +6548,9 @@ impl<'de> serde::Deserialize<'de> for write_set::WriteSetType {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "SCRIPT_WRITE_SET",
-            "DIRECT_WRITE_SET",
+            "WRITE_SET_TYPE_UNSPECIFIED",
+            "WRITE_SET_TYPE_SCRIPT_WRITE_SET",
+            "WRITE_SET_TYPE_DIRECT_WRITE_SET",
         ];
 
         struct GeneratedVisitor;
@@ -6549,8 +6593,9 @@ impl<'de> serde::Deserialize<'de> for write_set::WriteSetType {
                 E: serde::de::Error,
             {
                 match value {
-                    "SCRIPT_WRITE_SET" => Ok(write_set::WriteSetType::ScriptWriteSet),
-                    "DIRECT_WRITE_SET" => Ok(write_set::WriteSetType::DirectWriteSet),
+                    "WRITE_SET_TYPE_UNSPECIFIED" => Ok(write_set::WriteSetType::Unspecified),
+                    "WRITE_SET_TYPE_SCRIPT_WRITE_SET" => Ok(write_set::WriteSetType::ScriptWriteSet),
+                    "WRITE_SET_TYPE_DIRECT_WRITE_SET" => Ok(write_set::WriteSetType::DirectWriteSet),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }
@@ -6751,12 +6796,13 @@ impl serde::Serialize for write_set_change::Type {
         S: serde::Serializer,
     {
         let variant = match self {
-            Self::DeleteModule => "DELETE_MODULE",
-            Self::DeleteResource => "DELETE_RESOURCE",
-            Self::DeleteTableItem => "DELETE_TABLE_ITEM",
-            Self::WriteModule => "WRITE_MODULE",
-            Self::WriteResource => "WRITE_RESOURCE",
-            Self::WriteTableItem => "WRITE_TABLE_ITEM",
+            Self::Unspecified => "TYPE_UNSPECIFIED",
+            Self::DeleteModule => "TYPE_DELETE_MODULE",
+            Self::DeleteResource => "TYPE_DELETE_RESOURCE",
+            Self::DeleteTableItem => "TYPE_DELETE_TABLE_ITEM",
+            Self::WriteModule => "TYPE_WRITE_MODULE",
+            Self::WriteResource => "TYPE_WRITE_RESOURCE",
+            Self::WriteTableItem => "TYPE_WRITE_TABLE_ITEM",
         };
         serializer.serialize_str(variant)
     }
@@ -6768,12 +6814,13 @@ impl<'de> serde::Deserialize<'de> for write_set_change::Type {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "DELETE_MODULE",
-            "DELETE_RESOURCE",
-            "DELETE_TABLE_ITEM",
-            "WRITE_MODULE",
-            "WRITE_RESOURCE",
-            "WRITE_TABLE_ITEM",
+            "TYPE_UNSPECIFIED",
+            "TYPE_DELETE_MODULE",
+            "TYPE_DELETE_RESOURCE",
+            "TYPE_DELETE_TABLE_ITEM",
+            "TYPE_WRITE_MODULE",
+            "TYPE_WRITE_RESOURCE",
+            "TYPE_WRITE_TABLE_ITEM",
         ];
 
         struct GeneratedVisitor;
@@ -6816,12 +6863,13 @@ impl<'de> serde::Deserialize<'de> for write_set_change::Type {
                 E: serde::de::Error,
             {
                 match value {
-                    "DELETE_MODULE" => Ok(write_set_change::Type::DeleteModule),
-                    "DELETE_RESOURCE" => Ok(write_set_change::Type::DeleteResource),
-                    "DELETE_TABLE_ITEM" => Ok(write_set_change::Type::DeleteTableItem),
-                    "WRITE_MODULE" => Ok(write_set_change::Type::WriteModule),
-                    "WRITE_RESOURCE" => Ok(write_set_change::Type::WriteResource),
-                    "WRITE_TABLE_ITEM" => Ok(write_set_change::Type::WriteTableItem),
+                    "TYPE_UNSPECIFIED" => Ok(write_set_change::Type::Unspecified),
+                    "TYPE_DELETE_MODULE" => Ok(write_set_change::Type::DeleteModule),
+                    "TYPE_DELETE_RESOURCE" => Ok(write_set_change::Type::DeleteResource),
+                    "TYPE_DELETE_TABLE_ITEM" => Ok(write_set_change::Type::DeleteTableItem),
+                    "TYPE_WRITE_MODULE" => Ok(write_set_change::Type::WriteModule),
+                    "TYPE_WRITE_RESOURCE" => Ok(write_set_change::Type::WriteResource),
+                    "TYPE_WRITE_TABLE_ITEM" => Ok(write_set_change::Type::WriteTableItem),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }

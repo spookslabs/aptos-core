@@ -23,8 +23,10 @@ mod aptos_features;
 mod aptos_version;
 mod chain_id;
 mod consensus_config;
+mod execution_config;
 mod gas_schedule;
 mod timed_features;
+mod timestamp;
 mod validator_set;
 
 pub use self::{
@@ -37,8 +39,13 @@ pub use self::{
         ConsensusConfigV1, LeaderReputationType, OnChainConsensusConfig, ProposerAndVoterConfig,
         ProposerElectionType,
     },
+    execution_config::{
+        ExecutionConfigV1, ExecutionConfigV2, OnChainExecutionConfig, TransactionDeduperType,
+        TransactionShufflerType,
+    },
     gas_schedule::{GasSchedule, GasScheduleV2, StorageGasSchedule},
     timed_features::{TimedFeatureFlag, TimedFeatureOverride, TimedFeatures},
+    timestamp::CurrentTimeMicroseconds,
     validator_set::{ConsensusScheme, ValidatorSet},
 };
 
@@ -155,7 +162,7 @@ pub trait OnChainConfig: Send + Sync + DeserializeOwned {
 
     fn fetch_config<T>(storage: &T) -> Option<Self>
     where
-        T: ConfigStorage,
+        T: ConfigStorage + ?Sized,
     {
         let access_path = Self::access_path().ok()?;
         match storage.fetch_config(access_path) {

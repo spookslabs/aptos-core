@@ -34,6 +34,7 @@ use aptos_types::{
     account_address::AccountAddress,
     account_config::{AccountResource, CoinStoreResource, NewBlockEvent, CORE_CODE_ADDRESS},
     contract_event::EventWithVersion,
+    state_store::state_key::StateKey,
     transaction::SignedTransaction,
 };
 use move_core_types::language_storage::StructTag;
@@ -70,9 +71,17 @@ pub struct Client {
 
 impl Client {
     pub fn new_with_timeout(base_url: Url, timeout: Duration) -> Self {
+        Client::new_with_timeout_and_user_agent(base_url, timeout, USER_AGENT)
+    }
+
+    pub fn new_with_timeout_and_user_agent(
+        base_url: Url,
+        timeout: Duration,
+        user_agent: &str,
+    ) -> Self {
         let inner = ReqwestClient::builder()
             .timeout(timeout)
-            .user_agent(USER_AGENT)
+            .user_agent(user_agent)
             .cookie_store(true)
             .build()
             .unwrap();
@@ -1279,6 +1288,23 @@ impl Client {
         ))?;
         let data = json!({
             "key": hex::encode(key),
+        });
+
+        let response = self.post_bcs(url, data).await?;
+        Ok(response.map(|inner| inner.to_vec()))
+    }
+
+    pub async fn get_raw_state_value(
+        &self,
+        state_key: &StateKey,
+        version: u64,
+    ) -> AptosResult<Response<Vec<u8>>> {
+        let url = self.build_path(&format!(
+            "experimental/state_values/raw?ledger_version={}",
+            version
+        ))?;
+        let data = json!({
+            "key": hex::encode(bcs::to_bytes(state_key)?),
         });
 
         let response = self.post_bcs(url, data).await?;

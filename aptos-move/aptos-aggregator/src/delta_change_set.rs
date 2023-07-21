@@ -10,7 +10,7 @@ use aptos_state_view::StateView;
 use aptos_types::{
     state_store::state_key::StateKey,
     vm_status::{StatusCode, VMStatus},
-    write_set::{WriteOp, WriteSetMut},
+    write_set::{WriteOp, WriteSet, WriteSetMut},
 };
 use move_binary_format::errors::{Location, PartialVMError, PartialVMResult};
 use std::collections::BTreeMap;
@@ -68,7 +68,7 @@ impl DeltaOp {
         addition(base, self.max_positive, self.limit)?;
         subtraction(base, self.min_negative)?;
 
-        // If delta has been sucessfully validated, apply the update.
+        // If delta has been successfully validated, apply the update.
         match self.update {
             DeltaUpdate::Plus(value) => addition(base, value, self.limit),
             DeltaUpdate::Minus(value) => subtraction(base, value),
@@ -78,10 +78,10 @@ impl DeltaOp {
     /// Shifts by a `delta` the maximum positive value seen by `self`.
     fn shifted_max_positive_by(&self, delta: &DeltaOp) -> PartialVMResult<u128> {
         match delta.update {
-            // Suppose that maximim value seen is +M and we shift by +V. Then the
+            // Suppose that maximum value seen is +M and we shift by +V. Then the
             // new maximum value is M+V provided addition do no overflow.
             DeltaUpdate::Plus(value) => addition(value, self.max_positive, self.limit),
-            // Suppose that maximim value seen is +M and we shift by -V this time.
+            // Suppose that maximum value seen is +M and we shift by -V this time.
             // If M >= V, the result is +(M-V). Otherwise, `self` should have never
             // reached any positive value. By convention, we use 0 for the latter
             // case. Also, we can reuse `subtraction` which throws an error when M < V,
@@ -110,6 +110,11 @@ impl DeltaOp {
     /// correctly.
     pub fn merge_onto(&mut self, previous_delta: DeltaOp) -> PartialVMResult<()> {
         use DeltaUpdate::*;
+
+        assert_eq!(
+            self.limit, previous_delta.limit,
+            "Cannot merge deltas with different limits",
+        );
 
         // First, update the history values of this delta given that it starts from
         // +value or -value instead of 0. We should do this check to avoid cases like this:
@@ -166,31 +171,35 @@ impl DeltaOp {
     /// error VM status is returned.
     pub fn try_into_write_op(
         self,
-        state_view: &impl StateView,
+        state_view: &dyn StateView,
         state_key: &StateKey,
     ) -> anyhow::Result<WriteOp, VMStatus> {
-        state_view
+        // In case storage fails to fetch the value, return immediately.
+        let maybe_value = state_view
             .get_state_value_bytes(state_key)
-            .map_err(|_| VMStatus::Error(StatusCode::STORAGE_ERROR))
-            .and_then(|maybe_bytes| {
-                match maybe_bytes {
-                    Some(bytes) => {
-                        let base = deserialize(&bytes);
-                        self.apply_to(base)
-                            .map_err(|partial_error| {
-                                // If delta application fails, transform partial VM
-                                // error into an appropriate VM status.
-                                partial_error
-                                    .finish(Location::Module(AGGREGATOR_MODULE.clone()))
-                                    .into_vm_status()
-                            })
-                            .map(|result| WriteOp::Modification(serialize(&result)))
-                    },
-                    // Something is wrong, the value to which we apply delta should
-                    // always exist. Guard anyway.
-                    None => Err(VMStatus::Error(StatusCode::STORAGE_ERROR)),
-                }
-            })
+            .map_err(|e| VMStatus::error(StatusCode::STORAGE_ERROR, Some(e.to_string())))?;
+
+        // Otherwise we have to apply delta to the storage value.
+        match maybe_value {
+            Some(bytes) => {
+                let base = deserialize(&bytes);
+                self.apply_to(base)
+                    .map_err(|partial_error| {
+                        // If delta application fails, transform partial VM
+                        // error into an appropriate VM status.
+                        partial_error
+                            .finish(Location::Module(AGGREGATOR_MODULE.clone()))
+                            .into_vm_status()
+                    })
+                    .map(|result| WriteOp::Modification(serialize(&result)))
+            },
+            // Something is wrong, the value to which we apply delta should
+            // always exist. Guard anyway.
+            None => Err(VMStatus::error(
+                StatusCode::STORAGE_ERROR,
+                Some("Aggregator value does not exist in storage.".to_string()),
+            )),
+        }
     }
 }
 
@@ -218,7 +227,7 @@ pub fn subtraction(base: u128, value: u128) -> PartialVMResult<u128> {
     }
 }
 
-/// Returns partial VM error on abort. Can be used by delta partial functions
+/// Error for delta application. Can be used by delta partial functions
 /// to return descriptive error messages and an appropriate error code.
 fn abort_error(message: impl ToString, code: u64) -> PartialVMError {
     PartialVMError::new(StatusCode::ABORTED)
@@ -290,6 +299,10 @@ impl DeltaChangeSet {
         }
     }
 
+    pub fn get(&self, key: &StateKey) -> Option<&DeltaOp> {
+        self.delta_change_set.get(key)
+    }
+
     pub fn insert(&mut self, delta: (StateKey, DeltaOp)) {
         self.delta_change_set.insert(delta.0, delta.1);
     }
@@ -312,21 +325,36 @@ impl DeltaChangeSet {
         &mut self.delta_change_set
     }
 
-    /// Consumes the delta change set and tries to materialize it. Returns a
-    /// mutable write set if materialization succeeds (mutability since we want
-    /// to merge these writes with transaction outputs).
-    pub fn try_into_write_set_mut(
+    /// Converts deltas to a vector of write ops. In case conversion to a write op
+    /// failed, the error is propagated to the caller.
+    pub(crate) fn take_materialized(
         self,
-        state_view: &impl StateView,
-    ) -> anyhow::Result<WriteSetMut, VMStatus> {
-        let mut materialized_write_set = vec![];
+        state_view: &dyn StateView,
+    ) -> anyhow::Result<Vec<(StateKey, WriteOp)>, VMStatus> {
+        let mut ret = Vec::with_capacity(self.delta_change_set.len());
+
         for (state_key, delta_op) in self.delta_change_set {
             let write_op = delta_op.try_into_write_op(state_view, &state_key)?;
-            materialized_write_set.push((state_key, write_op));
+            ret.push((state_key, write_op));
         }
 
-        // All deltas are applied successfully.
-        Ok(WriteSetMut::new(materialized_write_set))
+        Ok(ret)
+    }
+
+    /// Consumes the delta change set and tries to materialize it into a write set.
+    pub fn try_into_write_set(
+        self,
+        state_view: &dyn StateView,
+    ) -> anyhow::Result<WriteSet, VMStatus> {
+        let materialized_write_set = self.take_materialized(state_view)?;
+        WriteSetMut::new(materialized_write_set)
+            .freeze()
+            .map_err(|_err| {
+                VMStatus::error(
+                    StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+                    Some("Error when freezing materialized deltas.".to_string()),
+                )
+            })
     }
 }
 
@@ -349,15 +377,15 @@ impl ::std::iter::IntoIterator for DeltaChangeSet {
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
     use super::*;
+    use aptos_language_e2e_tests::data_store::FakeDataStore;
     use aptos_state_view::TStateView;
     use aptos_types::state_store::{
         state_storage_usage::StateStorageUsage, state_value::StateValue,
     };
     use claims::{assert_err, assert_matches, assert_ok, assert_ok_eq};
     use once_cell::sync::Lazy;
-    use std::collections::HashMap;
 
     fn delta_add_with_history(v: u128, limit: u128, max: u128, min: u128) -> DeltaOp {
         let mut delta = delta_add(v, limit);
@@ -534,47 +562,97 @@ mod tests {
         assert_eq!(d.update, Plus(1));
     }
 
-    #[derive(Default)]
-    pub struct FakeView {
-        data: HashMap<StateKey, Vec<u8>>,
-    }
-
-    impl TStateView for FakeView {
-        type Key = StateKey;
-
-        fn get_state_value(&self, state_key: &StateKey) -> anyhow::Result<Option<StateValue>> {
-            Ok(self
-                .data
-                .get(state_key)
-                .cloned()
-                .map(StateValue::new_legacy))
-        }
-
-        fn is_genesis(&self) -> bool {
-            self.data.is_empty()
-        }
-
-        fn get_usage(&self) -> anyhow::Result<StateStorageUsage> {
-            Ok(StateStorageUsage::new_untracked())
-        }
-    }
-
     static KEY: Lazy<StateKey> = Lazy::new(|| StateKey::raw(String::from("test-key").into_bytes()));
 
     #[test]
-    fn test_failed_delta_application() {
-        let state_view = FakeView::default();
+    fn test_failed_write_op_conversion_because_of_empty_storage() {
+        let state_view = FakeDataStore::default();
         let delta_op = delta_add(10, 1000);
         assert_matches!(
             delta_op.try_into_write_op(&state_view, &KEY),
-            Err(VMStatus::Error(StatusCode::STORAGE_ERROR))
+            Err(VMStatus::Error {
+                status_code: StatusCode::STORAGE_ERROR,
+                message: Some(_),
+                sub_status: None
+            })
         );
     }
 
     #[test]
-    fn test_successful_delta_application() {
-        let mut state_view = FakeView::default();
-        state_view.data.insert(KEY.clone(), serialize(&100));
+    fn test_empty_storage_error_propagated() {
+        let state_view = FakeDataStore::default();
+        let deltas = vec![(KEY.clone(), delta_add(10, 100))];
+        let delta_change_set = DeltaChangeSet::new(deltas);
+        assert_err!(delta_change_set.try_into_write_set(&state_view));
+    }
+
+    struct BadStorage;
+
+    impl TStateView for BadStorage {
+        type Key = StateKey;
+
+        fn get_state_value(&self, _state_key: &Self::Key) -> anyhow::Result<Option<StateValue>> {
+            Err(anyhow::Error::new(VMStatus::error(
+                StatusCode::STORAGE_ERROR,
+                Some("Error message from BadStorage.".to_string()),
+            )))
+        }
+
+        fn is_genesis(&self) -> bool {
+            unreachable!()
+        }
+
+        fn get_usage(&self) -> anyhow::Result<StateStorageUsage> {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn test_failed_write_op_conversion_because_of_storage_error() {
+        let state_view = BadStorage;
+        let delta_op = delta_add(10, 1000);
+        assert_matches!(
+            delta_op.try_into_write_op(&state_view, &KEY),
+            Err(VMStatus::Error {
+                status_code: StatusCode::STORAGE_ERROR,
+                message: Some(_),
+                sub_status: None
+            })
+        );
+    }
+
+    #[test]
+    fn test_storage_error_propagated() {
+        let state_view = BadStorage;
+        let deltas = vec![(KEY.clone(), delta_add(10, 100))];
+        let delta_change_set = DeltaChangeSet::new(deltas);
+        assert_matches!(
+            delta_change_set.try_into_write_set(&state_view),
+            Err(VMStatus::Error {
+                status_code: StatusCode::STORAGE_ERROR,
+                message: Some(_),
+                sub_status: None
+            })
+        );
+    }
+
+    #[test]
+    fn test_delta_materialization_failure() {
+        let mut state_view = FakeDataStore::default();
+        state_view.set_legacy(KEY.clone(), serialize(&99));
+
+        let deltas = vec![(KEY.clone(), delta_add(10, 100))];
+        let delta_change_set = DeltaChangeSet::new(deltas);
+        assert_matches!(
+            delta_change_set.try_into_write_set(&state_view),
+            Err(VMStatus::MoveAbort(_, EADD_OVERFLOW))
+        );
+    }
+
+    #[test]
+    fn test_successful_write_op_conversion() {
+        let mut state_view = FakeDataStore::default();
+        state_view.set_legacy(KEY.clone(), serialize(&100));
 
         // Both addition and subtraction should succeed!
         let add_op = delta_add(100, 200);
@@ -588,9 +666,9 @@ mod tests {
     }
 
     #[test]
-    fn test_unsuccessful_delta_application() {
-        let mut state_view = FakeView::default();
-        state_view.data.insert(KEY.clone(), serialize(&100));
+    fn test_unsuccessful_write_op_conversion() {
+        let mut state_view = FakeDataStore::default();
+        state_view.set_legacy(KEY.clone(), serialize(&100));
 
         // Both addition and subtraction should fail!
         let add_op = delta_add(15, 100);

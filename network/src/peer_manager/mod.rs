@@ -26,7 +26,6 @@ use aptos_channels::{self, aptos_channel, message_queues::QueueStyle};
 use aptos_config::network_id::{NetworkContext, PeerNetworkId};
 use aptos_logger::prelude::*;
 use aptos_netcore::transport::{ConnectionOrigin, Transport};
-use aptos_rate_limiter::rate_limit::TokenBucketRateLimiter;
 use aptos_short_hex_str::AsShortHexStr;
 use aptos_time_service::{TimeService, TimeServiceTrait};
 use aptos_types::{network_address::NetworkAddress, PeerId};
@@ -39,7 +38,6 @@ use futures::{
 use std::{
     collections::{hash_map::Entry, HashMap},
     marker::PhantomData,
-    net::{IpAddr, Ipv4Addr},
     sync::Arc,
     time::Duration,
 };
@@ -64,8 +62,6 @@ use aptos_config::config::PeerRole;
 use aptos_types::account_address::AccountAddress;
 pub use senders::*;
 pub use types::*;
-
-pub type IpAddrTokenBucketLimiter = TokenBucketRateLimiter<IpAddr>;
 
 /// Responsible for handling and maintaining connections to other Peers
 pub struct PeerManager<TTransport, TSocket>
@@ -123,10 +119,6 @@ where
     max_message_size: usize,
     /// Inbound connection limit separate of outbound connections
     inbound_connection_limit: usize,
-    /// Keyed storage of all inbound rate limiters
-    inbound_rate_limiters: IpAddrTokenBucketLimiter,
-    /// Keyed storage of all outbound rate limiters
-    outbound_rate_limiters: IpAddrTokenBucketLimiter,
 }
 
 impl<TTransport, TSocket> PeerManager<TTransport, TSocket>
@@ -155,8 +147,6 @@ where
         max_frame_size: usize,
         max_message_size: usize,
         inbound_connection_limit: usize,
-        inbound_rate_limiters: IpAddrTokenBucketLimiter,
-        outbound_rate_limiters: IpAddrTokenBucketLimiter,
     ) -> Self {
         let (transport_notifs_tx, transport_notifs_rx) = aptos_channels::new(
             channel_size,
@@ -199,8 +189,6 @@ where
             max_frame_size,
             max_message_size,
             inbound_connection_limit,
-            inbound_rate_limiters,
-            outbound_rate_limiters,
         }
     }
 
@@ -332,11 +320,6 @@ where
                     }
                 }
 
-                let ip_addr = lost_conn_metadata
-                    .addr
-                    .find_ip_addr()
-                    .unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
-
                 // Notify upstream if there's still no active connection. This might be redundant,
                 // but does not affect correctness.
                 if !self.active_peers.contains_key(&peer_id) {
@@ -347,17 +330,12 @@ where
                     );
                     self.send_conn_notification(peer_id, notif);
                 }
-
-                // Garbage collect unused rate limit buckets
-                self.inbound_rate_limiters.try_garbage_collect_key(&ip_addr);
-                self.outbound_rate_limiters
-                    .try_garbage_collect_key(&ip_addr);
             },
         }
     }
 
     /// Handles a new connection event
-    fn handle_new_connection_event(&mut self, mut conn: Connection<TSocket>) {
+    fn handle_new_connection_event(&mut self, conn: Connection<TSocket>) {
         // Get the trusted peers
         let trusted_peers = match self
             .peers_and_metadata
@@ -376,67 +354,46 @@ where
             },
         };
 
-        // Handle the new connection based on the connection origin
-        match conn.metadata.origin {
-            ConnectionOrigin::Outbound => {
-                // TODO: This is a hack around having to feed trusted peers deeper
-                // into the outbound path. Inbound ones are assigned at Noise handshake time.
-                let peer_role = match trusted_peers.read().get(&conn.metadata.remote_peer_id) {
-                    Some(trusted_peer) => trusted_peer.role,
-                    None => {
-                        // Return an unknown peer role
-                        warn!(
-                            NetworkSchema::new(&self.network_context)
-                                .connection_metadata_with_address(&conn.metadata),
-                            "{} Outbound connection made with unknown peer role: {}",
-                            self.network_context,
-                            conn.metadata
-                        );
-                        PeerRole::Unknown
-                    },
-                };
-                conn.metadata.role = peer_role;
-            },
-            ConnectionOrigin::Inbound => {
-                // Everything below here is meant for unknown peers only, role comes from
-                // Noise handshake and if it's not `Unknown` it is trusted
-                if conn.metadata.role == PeerRole::Unknown {
-                    // TODO: Keep track of somewhere else to not take this hit in case of DDoS
-                    // Count unknown inbound connections
-                    let unknown_inbound_conns = self
-                        .active_peers
-                        .iter()
-                        .filter(|(peer_id, (metadata, _))| {
-                            metadata.origin == ConnectionOrigin::Inbound
-                                && trusted_peers
-                                    .read()
-                                    .get(peer_id)
-                                    .map_or(true, |peer| peer.role == PeerRole::Unknown)
-                        })
-                        .count();
+        // Verify that we have not reached the max connection limit for unknown inbound peers
+        if conn.metadata.origin == ConnectionOrigin::Inbound {
+            // Everything below here is meant for unknown peers only. The role comes from
+            // the Noise handshake and if it's not `Unknown` then it is trusted.
+            if conn.metadata.role == PeerRole::Unknown {
+                // TODO: Keep track of somewhere else to not take this hit in case of DDoS
+                // Count unknown inbound connections
+                let unknown_inbound_conns = self
+                    .active_peers
+                    .iter()
+                    .filter(|(peer_id, (metadata, _))| {
+                        metadata.origin == ConnectionOrigin::Inbound
+                            && trusted_peers
+                                .read()
+                                .get(peer_id)
+                                .map_or(true, |peer| peer.role == PeerRole::Unknown)
+                    })
+                    .count();
 
-                    // Reject excessive inbound connections made by unknown peers
-                    // We control outbound connections with Connectivity manager before we even send them
-                    // and we must allow connections that already exist to pass through tie breaking.
-                    if !self
-                        .active_peers
-                        .contains_key(&conn.metadata.remote_peer_id)
-                        && unknown_inbound_conns + 1 > self.inbound_connection_limit
-                    {
-                        info!(
-                            NetworkSchema::new(&self.network_context)
-                                .connection_metadata_with_address(&conn.metadata),
-                            "{} Connection rejected due to connection limit: {}",
-                            self.network_context,
-                            conn.metadata
-                        );
-                        counters::connections_rejected(&self.network_context, conn.metadata.origin)
-                            .inc();
-                        self.disconnect(conn);
-                        return;
-                    }
+                // Reject excessive inbound connections made by unknown peers
+                // We control outbound connections with Connectivity manager before we even send them
+                // and we must allow connections that already exist to pass through tie breaking.
+                if !self
+                    .active_peers
+                    .contains_key(&conn.metadata.remote_peer_id)
+                    && unknown_inbound_conns + 1 > self.inbound_connection_limit
+                {
+                    info!(
+                        NetworkSchema::new(&self.network_context)
+                            .connection_metadata_with_address(&conn.metadata),
+                        "{} Connection rejected due to connection limit: {}",
+                        self.network_context,
+                        conn.metadata
+                    );
+                    counters::connections_rejected(&self.network_context, conn.metadata.origin)
+                        .inc();
+                    self.disconnect(conn);
+                    return;
                 }
-            },
+            }
         }
 
         // Add the new peer and update the metric counters
@@ -689,14 +646,6 @@ where
             }
         }
 
-        let ip_addr = connection
-            .metadata
-            .addr
-            .find_ip_addr()
-            .unwrap_or(IpAddr::V4(Ipv4Addr::UNSPECIFIED));
-        let inbound_rate_limiter = self.inbound_rate_limiters.bucket(ip_addr);
-        let outbound_rate_limiter = self.outbound_rate_limiters.bucket(ip_addr);
-
         // TODO: Add label for peer.
         let (peer_reqs_tx, peer_reqs_rx) = aptos_channel::new(
             QueueStyle::FIFO,
@@ -724,8 +673,6 @@ where
             constants::MAX_CONCURRENT_OUTBOUND_RPCS,
             self.max_frame_size,
             self.max_message_size,
-            Some(inbound_rate_limiter),
-            Some(outbound_rate_limiter),
         );
         self.executor.spawn(peer.start());
 

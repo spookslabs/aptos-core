@@ -5,7 +5,7 @@
 use crate::{
     application::{
         error::Error,
-        metadata::{ConnectionState, PeerMetadata, PeerMonitoringMetadata},
+        metadata::{ConnectionState, PeerMetadata},
     },
     transport::{ConnectionId, ConnectionMetadata},
     ProtocolId,
@@ -15,6 +15,7 @@ use aptos_config::{
     network_id::{NetworkId, PeerNetworkId},
 };
 use aptos_infallible::RwLock;
+use aptos_peer_monitoring_service_types::PeerMonitoringMetadata;
 use aptos_types::PeerId;
 use std::{
     collections::{hash_map::Entry, HashMap},
@@ -51,6 +52,22 @@ impl PeersAndMetadata {
         });
 
         Arc::new(peers_and_metadata)
+    }
+
+    /// Returns all peers. Note: this will return disconnected and unhealthy peers, so
+    /// it is not recommended for applications to use this interface. Instead,
+    /// `get_connected_peers_and_metadata()` should be used.
+    pub fn get_all_peers(&self) -> Result<Vec<PeerNetworkId>, Error> {
+        let mut all_peers = Vec::new();
+        for network_id in self.get_registered_networks() {
+            let peer_metadata_for_network = self.get_peer_metadata_for_network(&network_id)?;
+            for (peer_id, _) in peer_metadata_for_network.read().iter() {
+                let peer_network_id = PeerNetworkId::new(network_id, *peer_id);
+                all_peers.push(peer_network_id);
+            }
+        }
+
+        Ok(all_peers)
     }
 
     /// Returns all connected peers that support at least one of

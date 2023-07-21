@@ -23,6 +23,7 @@ use aptos_types::{
     write_set::WriteSet,
 };
 pub use error::Error;
+pub use executed_block::ExecutedBlock;
 pub use executed_chunk::ExecutedChunk;
 pub use parsed_transaction_output::ParsedTransactionOutput;
 use serde::{Deserialize, Serialize};
@@ -37,6 +38,7 @@ use std::{
 };
 
 mod error;
+mod executed_block;
 mod executed_chunk;
 pub mod in_memory_state_calculator;
 mod parsed_transaction_output;
@@ -122,6 +124,10 @@ pub trait BlockExecutorTrait<T>: Send + Sync {
 
     /// Finishes the block executor by releasing memory held by inner data structures(SMT).
     fn finish(&self);
+
+    fn get_block_gas_limit(&self) -> Option<u64>;
+
+    fn update_block_gas_limit(&self, block_gas_limit: Option<u64>);
 }
 
 #[derive(Clone)]
@@ -223,7 +229,7 @@ pub struct ChunkCommitNotification {
 /// Not every transaction in the payload succeeds: the returned vector keeps the boolean status
 /// of success / failure of the transactions.
 /// Note that the specific details of compute_status are opaque to StateMachineReplication,
-/// which is going to simply pass the results between StateComputer and TxnManager.
+/// which is going to simply pass the results between StateComputer and PayloadClient.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct StateComputeResult {
     /// transaction accumulator root hash is identified as `state_id` in Consensus.
@@ -246,7 +252,7 @@ pub struct StateComputeResult {
     epoch_state: Option<EpochState>,
     /// The compute status (success/failure) of the given payload. The specific details are opaque
     /// for StateMachineReplication, which is merely passing it between StateComputer and
-    /// TxnManager.
+    /// PayloadClient.
     compute_status: Vec<TransactionStatus>,
 
     /// The transaction info hashes of all success txns.

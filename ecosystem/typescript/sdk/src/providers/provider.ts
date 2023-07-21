@@ -4,6 +4,7 @@ import { IndexerClient } from "./indexer";
 import * as Gen from "../generated/index";
 import { CustomEndpoints, Network, NetworkToIndexerAPI, NetworkToNodeAPI } from "../utils";
 
+type NetworkWithCustom = Network | "CUSTOM";
 /**
  * Builds a Provider class with an aptos client configured to connect to an Aptos node
  * and indexer client configured to connect to Aptos Indexer.
@@ -28,6 +29,8 @@ export class Provider {
 
   indexerClient: IndexerClient;
 
+  network: NetworkWithCustom;
+
   constructor(
     network: Network | CustomEndpoints,
     config?: Partial<Gen.OpenAPIConfig>,
@@ -39,9 +42,11 @@ export class Provider {
     if (typeof network === "object" && isCustomEndpoints(network)) {
       fullNodeUrl = network.fullnodeUrl;
       indexerUrl = network.indexerUrl;
+      this.network = "CUSTOM";
     } else {
       fullNodeUrl = NetworkToNodeAPI[network];
       indexerUrl = NetworkToIndexerAPI[network];
+      this.network = network;
     }
 
     if (!fullNodeUrl || !indexerUrl) {
@@ -65,6 +70,7 @@ Here, we combine AptosClient and IndexerClient classes into one Provider class t
 methods and properties from both classes.
 */
 function applyMixin(targetClass: any, baseClass: any, baseClassProp: string) {
+  // Mixin instance methods
   Object.getOwnPropertyNames(baseClass.prototype).forEach((propertyName) => {
     const propertyDescriptor = Object.getOwnPropertyDescriptor(baseClass.prototype, propertyName);
     if (!propertyDescriptor) return;
@@ -73,6 +79,20 @@ function applyMixin(targetClass: any, baseClass: any, baseClassProp: string) {
       return (this as any)[baseClassProp][propertyName](...args);
     };
     Object.defineProperty(targetClass.prototype, propertyName, propertyDescriptor);
+  });
+  // Mixin static methods
+  Object.getOwnPropertyNames(baseClass).forEach((propertyName) => {
+    const propertyDescriptor = Object.getOwnPropertyDescriptor(baseClass, propertyName);
+    if (!propertyDescriptor) return;
+    // eslint-disable-next-line func-names
+    propertyDescriptor.value = function (...args: any) {
+      return (this as any)[baseClassProp][propertyName](...args);
+    };
+    if (targetClass.hasOwnProperty.call(targetClass, propertyName)) {
+      // The mixin has already been applied, so skip applying it again
+      return;
+    }
+    Object.defineProperty(targetClass, propertyName, propertyDescriptor);
   });
 }
 

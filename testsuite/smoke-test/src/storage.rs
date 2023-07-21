@@ -111,8 +111,7 @@ async fn test_db_restore() {
     // make a backup from node 1
     let node1_config = swarm.validator(validator_peer_ids[1]).unwrap().config();
     let port = node1_config.storage.backup_service_address.port();
-    let backup_path = db_backup(port, 5, 400, 200, 5, &[]);
-
+    let (backup_path, _) = db_backup(port, 5, 400, 200, 5, &[]);
     // take down node 0
     let node_to_restart = validator_peer_ids[0];
     swarm.validator_mut(node_to_restart).unwrap().stop();
@@ -122,13 +121,19 @@ async fn test_db_restore() {
     let mut node0_config = swarm.validator(node_to_restart).unwrap().config().clone();
     let genesis_waypoint = node0_config.base.waypoint.genesis_waypoint();
     insert_waypoint(&mut node0_config, genesis_waypoint);
-    node0_config.save(node0_config_path).unwrap();
+    node0_config.save_to_path(node0_config_path).unwrap();
     let db_dir = node0_config.storage.dir();
     fs::remove_dir_all(db_dir.clone()).unwrap();
 
     info!("---------- 3. stopped node 0, gonna restore DB.");
     // restore db from backup
-    db_restore(backup_path.path(), db_dir.as_path(), &[]);
+    db_restore(
+        backup_path.path(),
+        db_dir.as_path(),
+        &[],
+        node0_config.storage.rocksdb_configs.use_state_kv_db,
+        None,
+    );
 
     expected_balance_0 -= 3;
     expected_balance_1 += 3;
@@ -182,7 +187,7 @@ fn db_backup_verify(backup_path: &Path, trusted_waypoints: &[Waypoint]) {
     metadata_cache_path.create_as_dir().unwrap();
 
     let mut cmd = Command::new(bin_path.as_path());
-
+    cmd.args(["backup", "verify"]);
     trusted_waypoints.iter().for_each(|w| {
         cmd.arg("--trust-waypoint");
         cmd.arg(&w.to_string());
@@ -190,8 +195,6 @@ fn db_backup_verify(backup_path: &Path, trusted_waypoints: &[Waypoint]) {
 
     let status = cmd
         .args([
-            "backup",
-            "verify",
             "--metadata-cache-dir",
             metadata_cache_path.path().to_str().unwrap(),
             "--concurrent-downloads",
@@ -222,7 +225,7 @@ fn replay_verify(backup_path: &Path, trusted_waypoints: &[Waypoint]) {
         cmd.arg(&w.to_string());
     });
 
-    let status = cmd
+    let replay = cmd
         .args([
             "--metadata-cache-dir",
             metadata_cache_path.path().to_str().unwrap(),
@@ -234,9 +237,13 @@ fn replay_verify(backup_path: &Path, trusted_waypoints: &[Waypoint]) {
             backup_path.to_str().unwrap(),
         ])
         .current_dir(workspace_root())
-        .status()
+        .output()
         .unwrap();
-    assert!(status.success(), "{}", status);
+    assert!(
+        replay.status.success(),
+        "{}",
+        std::str::from_utf8(&replay.stderr).unwrap()
+    );
 
     info!(
         "Backup replay-verified in {} seconds.",
@@ -252,7 +259,7 @@ fn wait_for_backups(
     metadata_cache_path: &Path,
     backup_path: &Path,
     trusted_waypoints: &[Waypoint],
-) -> Result<()> {
+) -> Result<Version> {
     for i in 0..120 {
         info!(
             "{}th wait for the backup to reach epoch {}, version {}.",
@@ -273,7 +280,7 @@ fn wait_for_backups(
                 now.elapsed().as_secs(),
                 state
             );
-            return Ok(());
+            return Ok(state.latest_state_snapshot_version.unwrap());
         }
         info!("Backup storage state: {}", state);
         if state.latest_transaction_version.is_some() {
@@ -316,7 +323,7 @@ pub(crate) fn db_backup(
     transaction_batch_size: usize,
     state_snapshot_interval_epochs: usize,
     trusted_waypoints: &[Waypoint],
-) -> TempPath {
+) -> (TempPath, Version) {
     info!("---------- running aptos db tool backup");
     let now = Instant::now();
     let bin_path = workspace_builder::get_bin("aptos-db-tool");
@@ -364,13 +371,46 @@ pub(crate) fn db_backup(
         backup_path.path(),
         trusted_waypoints,
     );
+
+    // start the backup compaction
+    let compaction = Command::new(bin_path.as_path())
+        .current_dir(workspace_root())
+        .args([
+            "backup-maintenance",
+            "compact",
+            "--epoch-ending-file-compact-factor",
+            "2",
+            "--state-snapshot-file-compact-factor",
+            "2",
+            "--transaction-file-compact-factor",
+            "2",
+            "--metadata-cache-dir",
+            metadata_cache_path1.path().to_str().unwrap(),
+            "--concurrent-downloads",
+            "4",
+            "--local-fs-dir",
+            backup_path.path().to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        compaction.status.success(),
+        "{}",
+        std::str::from_utf8(&compaction.stderr).unwrap()
+    );
     backup_coordinator.kill().unwrap();
-    wait_res.unwrap();
+    let snapshot_ver = wait_res.unwrap();
     replay_verify(backup_path.path(), trusted_waypoints);
-    backup_path
+    (backup_path, snapshot_ver)
 }
 
-pub(crate) fn db_restore(backup_path: &Path, db_path: &Path, trusted_waypoints: &[Waypoint]) {
+pub(crate) fn db_restore(
+    backup_path: &Path,
+    db_path: &Path,
+    trusted_waypoints: &[Waypoint],
+    use_state_kv_db: bool,
+    target_verion: Option<Version>, /* target version should be same as epoch ending version to start a node */
+) {
     let now = Instant::now();
     let bin_path = workspace_builder::get_bin("aptos-db-tool");
     let metadata_cache_path = TempPath::new();
@@ -383,6 +423,14 @@ pub(crate) fn db_restore(backup_path: &Path, db_path: &Path, trusted_waypoints: 
         cmd.arg("--trust-waypoint");
         cmd.arg(&w.to_string());
     });
+
+    if use_state_kv_db {
+        cmd.arg("--use-state-kv-db");
+    }
+    if let Some(version) = target_verion {
+        cmd.arg("--target-version");
+        cmd.arg(&version.to_string());
+    }
 
     let status = cmd
         .args([

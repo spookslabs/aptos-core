@@ -6,7 +6,6 @@ use crate::{
         stats::{DynamicStatsTracking, StatsAccumulator},
         update_seq_num_and_get_num_expired, wait_for_accounts_sequence,
     },
-    transaction_generator::TransactionGenerator,
     EmitModeParams,
 };
 use aptos_logger::{sample, sample::SampleRate, warn};
@@ -15,6 +14,7 @@ use aptos_sdk::{
     move_types::account_address::AccountAddress,
     types::{transaction::SignedTransaction, vm_status::StatusCode, LocalAccount},
 };
+use aptos_transaction_generator_lib::TransactionGenerator;
 use core::{
     cmp::{max, min},
     result::Result::{Err, Ok},
@@ -275,8 +275,14 @@ impl SubmissionWorker {
             .accounts
             .iter_mut()
             .choose_multiple(&mut self.rng, batch_size);
-        self.txn_generator
-            .generate_transactions(accounts, self.params.transactions_per_account)
+
+        accounts
+            .into_iter()
+            .flat_map(|account| {
+                self.txn_generator
+                    .generate_transactions(account, self.params.transactions_per_account)
+            })
+            .collect()
     }
 }
 
@@ -318,16 +324,16 @@ pub async fn submit_transactions(
                 .failed_submission
                 .fetch_add(failures.len() as u64, Ordering::Relaxed);
 
-            sample!(SampleRate::Duration(Duration::from_secs(60)), {
-                let by_error = failures
-                    .iter()
-                    .map(|f| {
-                        f.error
-                            .vm_error_code
-                            .and_then(|c| StatusCode::try_from(c).ok())
-                    })
-                    .counts();
-                if let Some(failure) = failures.first() {
+            let by_error = failures
+                .iter()
+                .map(|f| {
+                    f.error
+                        .vm_error_code
+                        .and_then(|c| StatusCode::try_from(c).ok())
+                })
+                .counts();
+            if let Some(failure) = failures.first() {
+                sample!(SampleRate::Duration(Duration::from_secs(60)), {
                     let sender = txns[failure.transaction_index].sender();
 
                     let last_transactions =
@@ -361,8 +367,8 @@ pub async fn submit_transactions(
                         balance,
                         last_transactions,
                     );
-                }
-            });
+                });
+            }
         },
     };
 }

@@ -71,6 +71,8 @@ impl TransferFunderConfig {
             self.transaction_submission_config.max_gas_amount,
             self.transaction_submission_config
                 .transaction_expiration_secs,
+            self.transaction_submission_config
+                .wait_for_outstanding_txns_secs,
             self.transaction_submission_config.wait_for_transactions,
         );
 
@@ -103,6 +105,9 @@ pub struct TransferFunder {
     /// requests in the order they came in.
     outstanding_requests: RwLock<Vec<(AccountAddress, u64)>>,
 
+    /// Amount of time we'll wait for the seqnum to catch up before resetting it.
+    wait_for_outstanding_txns_secs: u64,
+
     /// If set, we won't return responses until the transaction is processed.
     wait_for_transactions: bool,
 }
@@ -118,6 +123,7 @@ impl TransferFunder {
         gas_unit_price_override: Option<u64>,
         max_gas_amount: u64,
         transaction_expiration_secs: u64,
+        wait_for_outstanding_txns_secs: u64,
         wait_for_transactions: bool,
     ) -> Self {
         let gas_unit_price_manager =
@@ -134,6 +140,7 @@ impl TransferFunder {
             gas_unit_price_manager,
             gas_unit_price_override,
             outstanding_requests: RwLock::new(vec![]),
+            wait_for_outstanding_txns_secs,
             wait_for_transactions,
         }
     }
@@ -227,6 +234,7 @@ impl FunderTrait for TransferFunder {
         amount: Option<u64>,
         receiver_address: AccountAddress,
         check_only: bool,
+        did_bypass_checkers: bool,
     ) -> Result<Vec<SignedTransaction>, AptosTapError> {
         // Confirm the funder has sufficient balance, return a 500 if not. This
         // will only happen briefly, soon after we get into this state the LB
@@ -237,7 +245,7 @@ impl FunderTrait for TransferFunder {
         let client = self.get_api_client();
 
         // Determine amount to fund.
-        let amount = self.get_amount(amount);
+        let amount = self.get_amount(amount, did_bypass_checkers);
 
         // Update the sequence numbers of the accounts.
         let (_funder_seq_num, receiver_seq_num) = update_sequence_numbers(
@@ -246,6 +254,7 @@ impl FunderTrait for TransferFunder {
             &self.outstanding_requests,
             receiver_address,
             amount,
+            self.wait_for_outstanding_txns_secs,
         )
         .await?;
 
@@ -287,7 +296,13 @@ impl FunderTrait for TransferFunder {
         Ok(transactions)
     }
 
-    fn get_amount(&self, amount: Option<u64>) -> u64 {
+    fn get_amount(
+        &self,
+        amount: Option<u64>,
+        // Ignored for now with TransferFunder, since generally we don't use Bypassers
+        // when using the TransferFunder.
+        _did_bypass_checkers: bool,
+    ) -> u64 {
         match amount {
             Some(amount) => std::cmp::min(amount, self.amount_to_fund.0),
             None => self.amount_to_fund.0,

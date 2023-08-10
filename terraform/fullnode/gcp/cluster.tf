@@ -7,6 +7,7 @@ resource "google_container_cluster" "aptos" {
   lifecycle {
     ignore_changes = [
       private_cluster_config,
+      cluster_autoscaling[0].auto_provisioning_defaults[0].shielded_instance_config
     ]
     prevent_destroy = true
   }
@@ -56,8 +57,7 @@ resource "google_container_cluster" "aptos" {
   }
 
   network_policy {
-    enabled  = true
-    provider = "CALICO"
+    enabled = false
   }
 
   cluster_autoscaling {
@@ -73,6 +73,10 @@ resource "google_container_cluster" "aptos" {
         minimum       = 1
         maximum       = resource_limits.value
       }
+    }
+    auto_provisioning_defaults {
+      oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
+      service_account = google_service_account.gke.email
     }
   }
 }

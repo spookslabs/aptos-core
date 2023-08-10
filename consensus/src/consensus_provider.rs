@@ -16,13 +16,12 @@ use crate::{
 use aptos_bounded_executor::BoundedExecutor;
 use aptos_config::config::NodeConfig;
 use aptos_consensus_notifications::ConsensusNotificationSender;
-use aptos_event_notifications::ReconfigNotificationListener;
+use aptos_event_notifications::{DbBackedOnChainConfig, ReconfigNotificationListener};
 use aptos_executor::block_executor::BlockExecutor;
 use aptos_logger::prelude::*;
 use aptos_mempool::QuorumStoreRequest;
 use aptos_network::application::interface::{NetworkClient, NetworkServiceEvents};
 use aptos_storage_interface::DbReaderWriter;
-use aptos_types::transaction::Transaction;
 use aptos_vm::AptosVM;
 use futures::channel::mpsc;
 use std::sync::Arc;
@@ -36,7 +35,7 @@ pub fn start_consensus(
     state_sync_notifier: Arc<dyn ConsensusNotificationSender>,
     consensus_to_mempool_sender: mpsc::Sender<QuorumStoreRequest>,
     aptos_db: DbReaderWriter,
-    reconfig_events: ReconfigNotificationListener,
+    reconfig_events: ReconfigNotificationListener<DbBackedOnChainConfig>,
 ) -> Runtime {
     let runtime = aptos_runtimes::spawn_named_runtime("consensus".into(), None);
     let storage = Arc::new(StorageWriteProxy::new(node_config, aptos_db.reader.clone()));
@@ -48,7 +47,7 @@ pub fn start_consensus(
     ));
 
     let state_computer = Arc::new(ExecutionProxy::new(
-        Arc::new(BlockExecutor::<AptosVM, Transaction>::new(aptos_db)),
+        Arc::new(BlockExecutor::<AptosVM>::new(aptos_db)),
         txn_notifier,
         state_sync_notifier,
         runtime.handle(),

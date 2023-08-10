@@ -6,7 +6,8 @@
 
 use crate::account::AccountData;
 use anyhow::Result;
-use aptos_state_view::TStateView;
+use aptos_state_view::{in_memory_state_view::InMemoryStateView, TStateView};
+use aptos_table_natives::{TableHandle, TableResolver};
 use aptos_types::{
     access_path::AccessPath,
     account_config::CoinInfoResource,
@@ -22,7 +23,6 @@ use aptos_vm_genesis::{
     GenesisOptions,
 };
 use move_core_types::language_storage::ModuleId;
-use move_table_extension::{TableHandle, TableResolver};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -132,6 +132,10 @@ impl TStateView for FakeDataStore {
             usage.add_item(k.size() + v.size())
         }
         Ok(usage)
+    }
+
+    fn as_in_memory_state_view(&self) -> InMemoryStateView {
+        InMemoryStateView::new(self.state_data.clone())
     }
 }
 

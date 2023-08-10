@@ -18,12 +18,13 @@ use aptos_telemetry::service::telemetry_is_disabled;
 use aptos_types::{
     account_address::create_multisig_account_address,
     chain_id::ChainId,
+    on_chain_config::{FeatureFlag, Features},
     transaction::{authenticator::AuthenticationKey, TransactionPayload},
 };
 use itertools::Itertools;
-use move_core_types::account_address::AccountAddress;
+use move_core_types::{account_address::AccountAddress, language_storage::CORE_CODE_ADDRESS};
 use reqwest::Url;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::{
@@ -35,6 +36,7 @@ use std::{
     str::FromStr,
     time::{Duration, Instant, SystemTime},
 };
+use tokio::time::timeout;
 
 /// Prompts for confirmation until a yes or no is given explicitly
 pub fn prompt_yes(prompt: &str) -> bool {
@@ -81,7 +83,15 @@ pub async fn to_common_result<T: Serialize>(
         } else {
             None
         };
-        send_telemetry_event(command, latency, !is_err, error).await;
+
+        if let Err(err) = timeout(
+            Duration::from_millis(2000),
+            send_telemetry_event(command, latency, !is_err, error),
+        )
+        .await
+        {
+            debug!("send_telemetry_event timeout from CLI: {}", err.to_string())
+        }
     }
 
     let result: ResultWrapper<T> = result.into();
@@ -272,6 +282,15 @@ pub async fn get_auth_key(
     Ok(get_account(client, address).await?.authentication_key)
 }
 
+/// Retrieves the value of the specified feature flag from the rest client
+pub async fn get_feature_flag(client: &Client, flag: FeatureFlag) -> CliTypedResult<bool> {
+    let features = client
+        .get_account_resource_bcs::<Features>(CORE_CODE_ADDRESS, "0x1::features::Features")
+        .await?
+        .into_inner();
+    Ok(features.is_enabled(flag))
+}
+
 /// Retrieves the chain id from the rest client
 pub async fn chain_id(rest_client: &Client) -> CliTypedResult<ChainId> {
     let state = rest_client
@@ -451,9 +470,9 @@ pub async fn wait_for_transactions(
     Ok(())
 }
 
-pub fn start_logger() {
+pub fn start_logger(level: Level) {
     let mut logger = aptos_logger::Logger::new();
-    logger.channel_size(1000).is_async(false).level(Level::Warn);
+    logger.channel_size(1000).is_async(false).level(level);
     logger.build();
 }
 
@@ -471,5 +490,50 @@ pub async fn profile_or_submit(
             .submit_transaction(payload)
             .await
             .map(TransactionSummary::from)
+    }
+}
+
+/// Try parsing JSON in file at path into a specified type.
+pub fn parse_json_file<T: for<'a> Deserialize<'a>>(path_ref: &Path) -> CliTypedResult<T> {
+    serde_json::from_slice::<T>(&read_from_file(path_ref)?).map_err(|err| {
+        CliError::UnableToReadFile(format!("{}", path_ref.display()), err.to_string())
+    })
+}
+
+/// Convert a view function JSON field into a string option.
+///
+/// A view function JSON return represents an option via an inner JSON array titled `vec`.
+pub fn view_json_option_str(option_ref: &serde_json::Value) -> CliTypedResult<Option<String>> {
+    if let Some(vec_field) = option_ref.get("vec") {
+        if let Some(vec_array) = vec_field.as_array() {
+            if vec_array.is_empty() {
+                Ok(None)
+            } else if vec_array.len() > 1 {
+                Err(CliError::UnexpectedError(format!(
+                    "JSON `vec` array has more than one element: {:?}",
+                    vec_array
+                )))
+            } else {
+                let option_val_ref = &vec_array[0];
+                if let Some(inner_str) = option_val_ref.as_str() {
+                    Ok(Some(inner_str.to_string()))
+                } else {
+                    Err(CliError::UnexpectedError(format!(
+                        "JSON option is not a string: {}",
+                        option_val_ref
+                    )))
+                }
+            }
+        } else {
+            Err(CliError::UnexpectedError(format!(
+                "JSON `vec` field is not an array: {}",
+                vec_field
+            )))
+        }
+    } else {
+        Err(CliError::UnexpectedError(format!(
+            "JSON field does not have an inner `vec` field: {}",
+            option_ref
+        )))
     }
 }

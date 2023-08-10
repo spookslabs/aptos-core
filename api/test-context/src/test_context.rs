@@ -93,6 +93,9 @@ pub fn new_test_context(
     node_config: NodeConfig,
     use_db_with_indexer: bool,
 ) -> TestContext {
+    // Speculative logging uses a global variable and when many instances use it together, they
+    // panic, so we disable this to run tests.
+    aptos_vm_logging::disable_speculative_logging();
     let tmp_dir = TempPath::new();
     tmp_dir.create_as_dir().unwrap();
 
@@ -151,7 +154,7 @@ pub fn new_test_context(
         rng,
         root_key,
         validator_owner,
-        Box::new(BlockExecutor::<AptosVM, Transaction>::new(db_rw)),
+        Box::new(BlockExecutor::<AptosVM>::new(db_rw)),
         mempool,
         db,
         test_name,
@@ -167,7 +170,7 @@ pub struct TestContext {
     pub db: Arc<AptosDB>,
     rng: rand::rngs::StdRng,
     root_key: ConfigKey<Ed25519PrivateKey>,
-    executor: Arc<dyn BlockExecutorTrait<Transaction>>,
+    executor: Arc<dyn BlockExecutorTrait>,
     expect_status_code: u16,
     test_name: String,
     golden_output: Option<GoldenOutputs>,
@@ -181,7 +184,7 @@ impl TestContext {
         rng: rand::rngs::StdRng,
         root_key: Ed25519PrivateKey,
         validator_owner: AccountAddress,
-        executor: Box<dyn BlockExecutorTrait<Transaction>>,
+        executor: Box<dyn BlockExecutorTrait>,
         mempool: MockSharedMempool,
         db: Arc<AptosDB>,
         test_name: String,
@@ -604,7 +607,7 @@ impl TestContext {
         let parent_id = self.executor.committed_block_id();
         let result = self
             .executor
-            .execute_block((metadata.id(), txns.clone()), parent_id)
+            .execute_block((metadata.id(), txns.clone()).into(), parent_id, None)
             .unwrap();
         let mut compute_status = result.compute_status().clone();
         assert_eq!(compute_status.len(), txns.len(), "{:?}", result);

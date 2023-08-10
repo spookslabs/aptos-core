@@ -23,6 +23,7 @@ pub const RESOURCE_TAG: u8 = 1;
 pub const CORE_CODE_ADDRESS: AccountAddress = AccountAddress::ONE;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, PartialOrd, Ord)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(arbitrary::Arbitrary))]
 pub enum TypeTag {
     // alias for compatibility with old json serialized data.
     #[serde(rename = "bool", alias = "Bool")]
@@ -101,6 +102,7 @@ impl FromStr for TypeTag {
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, PartialOrd, Ord)]
+#[cfg_attr(any(test, feature = "fuzzing"), derive(arbitrary::Arbitrary))]
 pub struct StructTag {
     pub address: AccountAddress,
     pub module: Identifier,
@@ -131,6 +133,14 @@ impl StructTag {
         self.address == *move_std_addr
             && self.module.as_str().eq("string")
             && self.name.as_str().eq("String")
+    }
+
+    /// Returns true if this is a `StructTag` for a `std::option::Option` struct defined in the
+    /// standard library at address `move_std_addr`.
+    pub fn is_std_option(&self, move_std_addr: &AccountAddress) -> bool {
+        self.address == *move_std_addr
+            && self.module.as_str().eq("option")
+            && self.name.as_str().eq("Option")
     }
 
     pub fn module_id(&self) -> ModuleId {

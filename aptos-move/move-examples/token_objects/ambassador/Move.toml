@@ -1,0 +1,10 @@
+[package]
+name = 'ambassador'
+version = '1.0.0'
+
+[addresses]
+ambassador = "_"
+
+[dependencies]
+AptosFramework = { local = "../../../framework/aptos-framework" }
+AptosTokenObjects = { local = "../../../framework/aptos-token-objects" }

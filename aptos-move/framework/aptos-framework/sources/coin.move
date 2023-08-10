@@ -149,7 +149,7 @@ module aptos_framework::coin {
     }
 
     /// This should be called by on-chain governance to update the config and allow
-    // or disallow upgradability of total supply.
+    /// or disallow upgradability of total supply.
     public fun allow_supply_upgrades(aptos_framework: &signer, allowed: bool) acquires SupplyConfig {
         system_addresses::assert_aptos_framework(aptos_framework);
         let allow_upgrades = &mut borrow_global_mut<SupplyConfig>(@aptos_framework).allow_upgrades;
@@ -183,8 +183,13 @@ module aptos_framework::coin {
         };
         let amount = aggregator::read(&coin.value);
         assert!(amount <= MAX_U64, error::out_of_range(EAGGREGATABLE_COIN_VALUE_TOO_LARGE));
-
+        spec {
+            update aggregate_supply<CoinType> = aggregate_supply<CoinType> - amount;
+        };
         aggregator::sub(&mut coin.value, amount);
+        spec {
+            update supply<CoinType> = supply<CoinType> + amount;
+        };
         Coin<CoinType> {
             value: (amount as u64),
         }
@@ -192,8 +197,14 @@ module aptos_framework::coin {
 
     /// Merges `coin` into aggregatable coin (`dst_coin`).
     public(friend) fun merge_aggregatable_coin<CoinType>(dst_coin: &mut AggregatableCoin<CoinType>, coin: Coin<CoinType>) {
+        spec {
+            update supply<CoinType> = supply<CoinType> - coin.value;
+        };
         let Coin { value } = coin;
         let amount = (value as u128);
+        spec {
+            update aggregate_supply<CoinType> = aggregate_supply<CoinType> + amount;
+        };
         aggregator::add(&mut dst_coin.value, amount);
     }
 
@@ -240,6 +251,17 @@ module aptos_framework::coin {
     }
 
     #[view]
+    /// Returns `true` is account_addr has frozen the CoinStore or if it's not registered at all
+    public fun is_coin_store_frozen<CoinType>(account_addr: address): bool acquires CoinStore {
+        if(!is_account_registered<CoinType>(account_addr)) {
+          return true
+        };
+
+        let coin_store = borrow_global<CoinStore<CoinType>>(account_addr);
+        coin_store.frozen
+    }
+
+    #[view]
     /// Returns `true` if `account_addr` is registered to receive `CoinType`.
     public fun is_account_registered<CoinType>(account_addr: address): bool {
         exists<CoinStore<CoinType>>(account_addr)
@@ -279,13 +301,19 @@ module aptos_framework::coin {
         }
     }
 
+    //
     // Public functions
+    //
+
     /// Burn `coin` with capability.
     /// The capability `_cap` should be passed as a reference to `BurnCapability<CoinType>`.
     public fun burn<CoinType>(
         coin: Coin<CoinType>,
         _cap: &BurnCapability<CoinType>,
     ) acquires CoinInfo {
+        spec {
+            update supply<CoinType> = supply<CoinType> - coin.value;
+        };
         let Coin { value: amount } = coin;
         assert!(amount > 0, error::invalid_argument(EZERO_COIN_AMOUNT));
 
@@ -341,6 +369,9 @@ module aptos_framework::coin {
     /// so it is impossible to "burn" any non-zero amount of `Coin` without having
     /// a `BurnCapability` for the specific `CoinType`.
     public fun destroy_zero<CoinType>(zero_coin: Coin<CoinType>) {
+        spec {
+            update supply<CoinType> = supply<CoinType> - zero_coin.value;
+        };
         let Coin { value } = zero_coin;
         assert!(value == 0, error::invalid_argument(EDESTRUCTION_OF_NONZERO_TOKEN))
     }
@@ -348,14 +379,26 @@ module aptos_framework::coin {
     /// Extracts `amount` from the passed-in `coin`, where the original token is modified in place.
     public fun extract<CoinType>(coin: &mut Coin<CoinType>, amount: u64): Coin<CoinType> {
         assert!(coin.value >= amount, error::invalid_argument(EINSUFFICIENT_BALANCE));
+        spec {
+            update supply<CoinType> = supply<CoinType> - amount;
+        };
         coin.value = coin.value - amount;
+        spec {
+            update supply<CoinType> = supply<CoinType> + amount;
+        };
         Coin { value: amount }
     }
 
     /// Extracts the entire amount from the passed-in `coin`, where the original token is modified in place.
     public fun extract_all<CoinType>(coin: &mut Coin<CoinType>): Coin<CoinType> {
         let total_value = coin.value;
+        spec {
+            update supply<CoinType> = supply<CoinType> - coin.value;
+        };
         coin.value = 0;
+        spec {
+            update supply<CoinType> = supply<CoinType> + total_value;
+        };
         Coin { value: total_value }
     }
 
@@ -472,7 +515,13 @@ module aptos_framework::coin {
         spec {
             assume dst_coin.value + source_coin.value <= MAX_U64;
         };
+        spec {
+            update supply<CoinType> = supply<CoinType> - source_coin.value;
+        };
         let Coin { value } = source_coin;
+        spec {
+            update supply<CoinType> = supply<CoinType> + value;
+        };
         dst_coin.value = dst_coin.value + value;
     }
 
@@ -484,7 +533,9 @@ module aptos_framework::coin {
         _cap: &MintCapability<CoinType>,
     ): Coin<CoinType> acquires CoinInfo {
         if (amount == 0) {
-            return zero<CoinType>()
+            return Coin<CoinType> {
+                value: 0
+            }
         };
 
         let maybe_supply = &mut borrow_global_mut<CoinInfo<CoinType>>(coin_address<CoinType>()).supply;
@@ -492,7 +543,9 @@ module aptos_framework::coin {
             let supply = option::borrow_mut(maybe_supply);
             optional_aggregator::add(supply, (amount as u128));
         };
-
+        spec {
+            update supply<CoinType> = supply<CoinType> + amount;
+        };
         Coin<CoinType> { value: amount }
     }
 
@@ -555,6 +608,9 @@ module aptos_framework::coin {
 
     /// Create a new `Coin<CoinType>` with a value of `0`.
     public fun zero<CoinType>(): Coin<CoinType> {
+        spec {
+            update supply<CoinType> = supply<CoinType> + 0;
+        };
         Coin<CoinType> {
             value: 0
         }
@@ -836,6 +892,32 @@ module aptos_framework::coin {
         assert!(is_coin_initialized<FakeMoney>(), 1);
 
         move_to(&source, FakeMoneyCapabilities {
+            burn_cap,
+            freeze_cap,
+            mint_cap,
+        });
+    }
+
+    #[test(account = @0x1)]
+    public fun test_is_coin_store_frozen(account: signer) acquires CoinStore {
+        let account_addr = signer::address_of(&account);
+        // An non registered account is has a frozen coin store by default
+        assert!(is_coin_store_frozen<FakeMoney>(account_addr), 1);
+
+        account::create_account_for_test(account_addr);
+        let (burn_cap, freeze_cap, mint_cap) = initialize_and_register_fake_money(&account, 18, true);
+
+        assert!(!is_coin_store_frozen<FakeMoney>(account_addr), 1);
+
+        // freeze account
+        freeze_coin_store(account_addr, &freeze_cap);
+        assert!(is_coin_store_frozen<FakeMoney>(account_addr), 1);
+
+        // unfreeze account
+        unfreeze_coin_store(account_addr, &freeze_cap);
+        assert!(!is_coin_store_frozen<FakeMoney>(account_addr), 1);
+
+        move_to(&account, FakeMoneyCapabilities {
             burn_cap,
             freeze_cap,
             mint_cap,

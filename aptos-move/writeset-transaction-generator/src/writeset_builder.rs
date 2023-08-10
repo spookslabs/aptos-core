@@ -4,10 +4,7 @@
 
 use anyhow::format_err;
 use aptos_crypto::HashValue;
-use aptos_gas::{
-    AbstractValueSizeGasParameters, ChangeSetConfigs, NativeGasParameters,
-    LATEST_GAS_FEATURE_VERSION,
-};
+use aptos_gas_schedule::{MiscGasParameters, NativeGasParameters, LATEST_GAS_FEATURE_VERSION};
 use aptos_state_view::StateView;
 use aptos_types::{
     account_address::AccountAddress,
@@ -19,6 +16,7 @@ use aptos_vm::{
     data_cache::StorageAdapter,
     move_vm_ext::{MoveVmExt, SessionExt, SessionId},
 };
+use aptos_vm_types::storage::ChangeSetConfigs;
 use move_core_types::{
     identifier::Identifier,
     language_storage::{ModuleId, TypeTag},
@@ -113,7 +111,7 @@ where
 {
     let move_vm = MoveVmExt::new(
         NativeGasParameters::zeros(),
-        AbstractValueSizeGasParameters::zeros(),
+        MiscGasParameters::zeros(),
         LATEST_GAS_FEATURE_VERSION,
         chain_id,
         Features::default(),
@@ -121,14 +119,12 @@ where
     )
     .unwrap();
     let state_view_storage = StorageAdapter::new(state_view);
-    let change_set_ext = {
+    let change_set = {
         // TODO: specify an id by human and pass that in.
         let genesis_id = HashValue::zero();
-        let mut session = GenesisSession(move_vm.new_session(
-            &state_view_storage,
-            SessionId::genesis(genesis_id),
-            true,
-        ));
+        let mut session = GenesisSession(
+            move_vm.new_session(&state_view_storage, SessionId::genesis(genesis_id)),
+        );
         session.disable_reconfiguration();
         procedure(&mut session);
         session.enable_reconfiguration();
@@ -143,6 +139,8 @@ where
     };
 
     // Genesis never produces the delta change set.
-    let (_delta_change_set, change_set) = change_set_ext.into_inner();
+    assert!(change_set.aggregator_delta_set().is_empty());
     change_set
+        .try_into_storage_change_set()
+        .expect("Conversion from VMChangeSet into ChangeSet should always succeed")
 }

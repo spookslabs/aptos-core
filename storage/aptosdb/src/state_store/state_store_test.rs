@@ -42,10 +42,11 @@ fn put_value_set(
     let jmt_updates = jmt_updates(&value_set);
 
     let root = state_store
-        .merklize_value_set(jmt_update_refs(&jmt_updates), None, version, base_version)
+        .merklize_value_set(jmt_update_refs(&jmt_updates), version, base_version)
         .unwrap();
     let ledger_batch = SchemaBatch::new();
     let sharded_state_kv_batches = new_sharded_kv_schema_batch();
+    let state_kv_metadata_batch = SchemaBatch::new();
     state_store
         .put_value_sets(
             vec![&sharded_value_set],
@@ -54,6 +55,9 @@ fn put_value_set(
             None,
             &ledger_batch,
             &sharded_state_kv_batches,
+            &state_kv_metadata_batch,
+            /*put_state_value_indices=*/ false,
+            /*skip_usage=*/ false,
         )
         .unwrap();
     state_store
@@ -63,7 +67,7 @@ fn put_value_set(
         .unwrap();
     state_store
         .state_kv_db
-        .commit(version, sharded_state_kv_batches)
+        .commit(version, state_kv_metadata_batch, sharded_state_kv_batches)
         .unwrap();
     root
 }
@@ -488,7 +492,7 @@ proptest! {
             StateSnapshotRestore::new(&store2.state_merkle_db, store2, version, expected_root_hash, true, /* async_commit */ StateSnapshotRestoreMode::Default).unwrap();
 
         let dummy_state_key = StateKey::raw(vec![]);
-        let (top_levels_batch, sharded_batches, _) = store2.state_merkle_db.merklize_value_set(vec![(max_hash, Some(&(HashValue::random(), dummy_state_key)))], None, 0, None, None).unwrap();
+        let (top_levels_batch, sharded_batches, _) = store2.state_merkle_db.merklize_value_set(vec![(max_hash, Some(&(HashValue::random(), dummy_state_key)))], 0, None, None).unwrap();
         store2.state_merkle_db.commit(version, top_levels_batch, sharded_batches).unwrap();
         assert!(store2.state_merkle_db.get_rightmost_leaf(version).unwrap().is_none());
 

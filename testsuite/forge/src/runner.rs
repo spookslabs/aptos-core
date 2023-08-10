@@ -2,14 +2,14 @@
 // Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::*;
 // TODO going to remove random seed once cluster deployment supports re-run genesis
 use crate::{
-    success_criteria::SuccessCriteria,
-    system_metrics::{MetricsThreshold, SystemMetricsThreshold},
+    success_criteria::{MetricsThreshold, SuccessCriteria, SystemMetricsThreshold},
+    *,
 };
 use anyhow::{bail, format_err, Error, Result};
 use aptos_framework::ReleaseBundle;
+use clap::{Parser, ValueEnum};
 use rand::{rngs::OsRng, Rng, SeedableRng};
 use std::{
     fmt::{Display, Formatter},
@@ -20,85 +20,77 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use structopt::{clap::arg_enum, StructOpt};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 use tokio::runtime::Runtime;
 
 const KUBERNETES_SERVICE_HOST: &str = "KUBERNETES_SERVICE_HOST";
 pub const FORGE_RUNNER_MODE: &str = "FORGE_RUNNER_MODE";
 
-#[derive(Debug, StructOpt)]
-#[structopt(about = "Forged in Fire")]
+#[derive(Debug, Parser)]
+#[clap(about = "Forged in Fire", styles = aptos_cli_common::aptos_cli_style())]
 pub struct Options {
     /// The FILTER string is tested against the name of all tests, and only those tests whose names
     /// contain the filter are run.
     filter: Option<String>,
-    #[structopt(long = "exact")]
+    #[clap(long = "exact")]
     /// Exactly match filters rather than by substring
     filter_exact: bool,
     #[allow(dead_code)]
-    #[structopt(long, default_value = "1", env = "RUST_TEST_THREADS")]
+    #[clap(long, default_value = "1", env = "RUST_TEST_THREADS")]
     /// NO-OP: unsupported option, exists for compatibility with the default test harness
     /// Number of threads used for running tests in parallel
     test_threads: NonZeroUsize,
     #[allow(dead_code)]
-    #[structopt(short = "q", long)]
+    #[clap(short = 'q', long)]
     /// NO-OP: unsupported option, exists for compatibility with the default test harness
     quiet: bool,
     #[allow(dead_code)]
-    #[structopt(long)]
+    #[clap(long)]
     /// NO-OP: unsupported option, exists for compatibility with the default test harness
     nocapture: bool,
-    #[structopt(long)]
+    #[clap(long)]
     /// List all tests
     pub list: bool,
-    #[structopt(long)]
+    #[clap(long)]
     /// List or run ignored tests
     ignored: bool,
-    #[structopt(long)]
+    #[clap(long)]
     /// Include ignored tests when listing or running tests
     include_ignored: bool,
     /// Configure formatting of output:
     ///   pretty = Print verbose output;
     ///   terse = Display one character per test;
     ///   (json is unsupported, exists for compatibility with the default test harness)
-    #[structopt(long, possible_values = &Format::variants(), default_value, case_insensitive = true)]
+    #[clap(long, value_enum, ignore_case = true, default_value_t = Format::Pretty)]
     format: Format,
     #[allow(dead_code)]
-    #[structopt(short = "Z")]
+    #[clap(short = 'Z')]
     /// NO-OP: unsupported option, exists for compatibility with the default test harness
     /// -Z unstable-options Enable nightly-only flags:
     ///                     unstable-options = Allow use of experimental features
     z_unstable_options: Option<String>,
     #[allow(dead_code)]
-    #[structopt(long)]
+    #[clap(long)]
     /// NO-OP: unsupported option, exists for compatibility with the default test harness
     /// Show captured stdout of successful tests
     show_output: bool,
 }
 
 impl Options {
-    pub fn from_args() -> Self {
-        StructOpt::from_args()
+    pub fn parse() -> Self {
+        Parser::parse()
     }
 }
 
-arg_enum! {
-    #[derive(Debug, Eq, PartialEq)]
-    pub enum Format {
-        Pretty,
-        Terse,
-        Json,
-    }
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, ValueEnum)]
+pub enum Format {
+    #[default]
+    Pretty,
+    Terse,
+    Json,
 }
 
-impl Default for Format {
-    fn default() -> Self {
-        Format::Pretty
-    }
-}
-
-pub fn forge_main<F: Factory>(tests: ForgeConfig<'_>, factory: F, options: &Options) -> Result<()> {
+pub fn forge_main<F: Factory>(tests: ForgeConfig, factory: F, options: &Options) -> Result<()> {
     let forge = Forge::new(options, tests, Duration::from_secs(30), factory);
 
     if options.list {
@@ -125,10 +117,10 @@ pub enum InitialVersion {
 pub type NodeConfigFn = Arc<dyn Fn(&mut serde_yaml::Value) + Send + Sync>;
 pub type GenesisConfigFn = Arc<dyn Fn(&mut serde_yaml::Value) + Send + Sync>;
 
-pub struct ForgeConfig<'cfg> {
-    aptos_tests: Vec<&'cfg dyn AptosTest>,
-    admin_tests: Vec<&'cfg dyn AdminTest>,
-    network_tests: Vec<&'cfg dyn NetworkTest>,
+pub struct ForgeConfig {
+    aptos_tests: Vec<Box<dyn AptosTest>>,
+    admin_tests: Vec<Box<dyn AdminTest>>,
+    network_tests: Vec<Box<dyn NetworkTest>>,
 
     /// The initial number of validators to spawn when the test harness creates a swarm
     initial_validator_count: NonZeroUsize,
@@ -158,22 +150,37 @@ pub struct ForgeConfig<'cfg> {
     existing_db_tag: Option<String>,
 }
 
-impl<'cfg> ForgeConfig<'cfg> {
+impl ForgeConfig {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn with_aptos_tests(mut self, aptos_tests: Vec<&'cfg dyn AptosTest>) -> Self {
+    pub fn add_aptos_test<T: AptosTest + 'static>(mut self, aptos_test: T) -> Self {
+        self.aptos_tests.push(Box::new(aptos_test));
+        self
+    }
+
+    pub fn with_aptos_tests(mut self, aptos_tests: Vec<Box<dyn AptosTest>>) -> Self {
         self.aptos_tests = aptos_tests;
         self
     }
 
-    pub fn with_admin_tests(mut self, admin_tests: Vec<&'cfg dyn AdminTest>) -> Self {
+    pub fn add_admin_test<T: AdminTest + 'static>(mut self, admin_test: T) -> Self {
+        self.admin_tests.push(Box::new(admin_test));
+        self
+    }
+
+    pub fn with_admin_tests(mut self, admin_tests: Vec<Box<dyn AdminTest>>) -> Self {
         self.admin_tests = admin_tests;
         self
     }
 
-    pub fn with_network_tests(mut self, network_tests: Vec<&'cfg dyn NetworkTest>) -> Self {
+    pub fn add_network_test<T: NetworkTest + 'static>(mut self, network_test: T) -> Self {
+        self.network_tests.push(Box::new(network_test));
+        self
+    }
+
+    pub fn with_network_tests(mut self, network_tests: Vec<Box<dyn NetworkTest>>) -> Self {
         self.network_tests = network_tests;
         self
     }
@@ -240,12 +247,55 @@ impl<'cfg> ForgeConfig<'cfg> {
         self.admin_tests.len() + self.network_tests.len() + self.aptos_tests.len()
     }
 
-    pub fn all_tests(&self) -> impl Iterator<Item = &'_ dyn Test> {
+    pub fn all_tests(&self) -> Vec<Box<AnyTestRef<'_>>> {
         self.admin_tests
             .iter()
-            .map(|t| t as &dyn Test)
-            .chain(self.network_tests.iter().map(|t| t as &dyn Test))
-            .chain(self.aptos_tests.iter().map(|t| t as &dyn Test))
+            .map(|t| Box::new(AnyTestRef::Admin(t.as_ref())))
+            .chain(
+                self.network_tests
+                    .iter()
+                    .map(|t| Box::new(AnyTestRef::Network(t.as_ref()))),
+            )
+            .chain(
+                self.aptos_tests
+                    .iter()
+                    .map(|t| Box::new(AnyTestRef::Aptos(t.as_ref()))),
+            )
+            .collect()
+    }
+}
+
+// Workaround way to implement all_tests, for:
+// error[E0658]: cannot cast `dyn interface::admin::AdminTest` to `dyn interface::test::Test`, trait upcasting coercion is experimental
+pub enum AnyTestRef<'a> {
+    Aptos(&'a dyn AptosTest),
+    Admin(&'a dyn AdminTest),
+    Network(&'a dyn NetworkTest),
+}
+
+impl<'a> Test for AnyTestRef<'a> {
+    fn name(&self) -> &'static str {
+        match self {
+            AnyTestRef::Aptos(t) => t.name(),
+            AnyTestRef::Admin(t) => t.name(),
+            AnyTestRef::Network(t) => t.name(),
+        }
+    }
+
+    fn ignored(&self) -> bool {
+        match self {
+            AnyTestRef::Aptos(t) => t.ignored(),
+            AnyTestRef::Admin(t) => t.ignored(),
+            AnyTestRef::Network(t) => t.ignored(),
+        }
+    }
+
+    fn should_fail(&self) -> ShouldFail {
+        match self {
+            AnyTestRef::Aptos(t) => t.should_fail(),
+            AnyTestRef::Admin(t) => t.should_fail(),
+            AnyTestRef::Network(t) => t.should_fail(),
+        }
     }
 }
 
@@ -279,7 +329,7 @@ impl ForgeRunnerMode {
     }
 }
 
-impl<'cfg> Default for ForgeConfig<'cfg> {
+impl Default for ForgeConfig {
     fn default() -> Self {
         let forge_run_mode = ForgeRunnerMode::try_from_env().unwrap_or(ForgeRunnerMode::K8s);
         let success_criteria = if forge_run_mode == ForgeRunnerMode::Local {
@@ -289,9 +339,9 @@ impl<'cfg> Default for ForgeConfig<'cfg> {
                 .add_no_restarts()
                 .add_system_metrics_threshold(SystemMetricsThreshold::new(
                     // Check that we don't use more than 12 CPU cores for 30% of the time.
-                    MetricsThreshold::new(12, 30),
+                    MetricsThreshold::new(12.0, 30),
                     // Check that we don't use more than 10 GB of memory for 30% of the time.
-                    MetricsThreshold::new(10 * 1024 * 1024 * 1024, 30),
+                    MetricsThreshold::new_gb(10.0, 30),
                 ))
         };
         Self {
@@ -315,7 +365,7 @@ impl<'cfg> Default for ForgeConfig<'cfg> {
 
 pub struct Forge<'cfg, F> {
     options: &'cfg Options,
-    tests: ForgeConfig<'cfg>,
+    tests: ForgeConfig,
     global_duration: Duration,
     factory: F,
 }
@@ -323,7 +373,7 @@ pub struct Forge<'cfg, F> {
 impl<'cfg, F: Factory> Forge<'cfg, F> {
     pub fn new(
         options: &'cfg Options,
-        tests: ForgeConfig<'cfg>,
+        tests: ForgeConfig,
         global_duration: Duration,
         factory: F,
     ) -> Self {
@@ -336,7 +386,7 @@ impl<'cfg, F: Factory> Forge<'cfg, F> {
     }
 
     pub fn list(&self) -> Result<()> {
-        for test in self.filter_tests(self.tests.all_tests()) {
+        for test in self.filter_tests(&self.tests.all_tests()) {
             println!("{}: test", test.name());
         }
 
@@ -344,7 +394,7 @@ impl<'cfg, F: Factory> Forge<'cfg, F> {
             println!();
             println!(
                 "{} tests",
-                self.filter_tests(self.tests.all_tests()).count()
+                self.filter_tests(&self.tests.all_tests()).count()
             );
         }
 
@@ -362,8 +412,8 @@ impl<'cfg, F: Factory> Forge<'cfg, F> {
     }
 
     pub fn run(&self) -> Result<TestReport> {
-        let test_count = self.filter_tests(self.tests.all_tests()).count();
-        let filtered_out = test_count.saturating_sub(self.tests.all_tests().count());
+        let test_count = self.filter_tests(&self.tests.all_tests()).count();
+        let filtered_out = test_count.saturating_sub(self.tests.all_tests().len());
 
         let mut report = TestReport::new();
         let mut summary = TestSummary::new(test_count, filtered_out);
@@ -396,7 +446,7 @@ impl<'cfg, F: Factory> Forge<'cfg, F> {
             ))?;
 
             // Run AptosTests
-            for test in self.filter_tests(self.tests.aptos_tests.iter()) {
+            for test in self.filter_tests(&self.tests.aptos_tests) {
                 let mut aptos_ctx = AptosContext::new(
                     CoreContext::from_rng(&mut rng),
                     swarm.chain_info().into_aptos_public_info(),
@@ -408,7 +458,7 @@ impl<'cfg, F: Factory> Forge<'cfg, F> {
             }
 
             // Run AdminTests
-            for test in self.filter_tests(self.tests.admin_tests.iter()) {
+            for test in self.filter_tests(&self.tests.admin_tests) {
                 let mut admin_ctx = AdminContext::new(
                     CoreContext::from_rng(&mut rng),
                     swarm.chain_info(),
@@ -419,7 +469,7 @@ impl<'cfg, F: Factory> Forge<'cfg, F> {
                 summary.handle_result(test.name().to_owned(), result)?;
             }
 
-            for test in self.filter_tests(self.tests.network_tests.iter()) {
+            for test in self.filter_tests(&self.tests.network_tests) {
                 let mut network_ctx = NetworkContext::new(
                     CoreContext::from_rng(&mut rng),
                     &mut *swarm,
@@ -452,11 +502,12 @@ impl<'cfg, F: Factory> Forge<'cfg, F> {
         }
     }
 
-    fn filter_tests<'a, T: Test, I: Iterator<Item = T> + 'a>(
+    fn filter_tests<'a, T: Test + ?Sized>(
         &'a self,
-        tests: I,
-    ) -> impl Iterator<Item = T> + 'a {
+        tests: &'a [Box<T>],
+    ) -> impl Iterator<Item = &'a Box<T>> {
         tests
+            .iter()
             // Filter by ignored
             .filter(
                 move |test| match (self.options.include_ignored, self.options.ignored) {
@@ -661,4 +712,10 @@ mod test {
             "Invalid runner mode: durian"
         );
     }
+}
+
+#[test]
+fn verify_tool() {
+    use clap::CommandFactory;
+    Options::command().debug_assert()
 }

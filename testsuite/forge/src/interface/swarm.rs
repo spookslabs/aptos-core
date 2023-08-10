@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    interface::system_metrics::SystemMetricsThreshold, AptosPublicInfo, ChainInfo, FullNode,
-    NodeExt, Result, SwarmChaos, Validator, Version,
+    AptosPublicInfo, ChainInfo, FullNode, NodeExt, Result, SwarmChaos, Validator, Version,
 };
 use anyhow::{anyhow, bail};
 use aptos_config::config::NodeConfig;
@@ -12,7 +11,7 @@ use aptos_logger::info;
 use aptos_rest_client::Client as RestClient;
 use aptos_sdk::types::PeerId;
 use futures::future::{join_all, try_join_all};
-use prometheus_http_query::response::PromqlResult;
+use prometheus_http_query::response::{PromqlResult, Sample};
 use std::time::{Duration, Instant};
 use tokio::runtime::Runtime;
 
@@ -64,7 +63,7 @@ pub trait Swarm: Sync {
     ) -> Result<PeerId>;
 
     /// Adds a FullNode to the swarm and returns the PeerId
-    fn add_full_node(&mut self, version: &Version, template: NodeConfig) -> Result<PeerId>;
+    async fn add_full_node(&mut self, version: &Version, template: NodeConfig) -> Result<PeerId>;
 
     /// Removes the FullNode with the provided PeerId
     fn remove_full_node(&mut self, id: PeerId) -> Result<()>;
@@ -85,13 +84,6 @@ pub trait Swarm: Sync {
     async fn ensure_no_validator_restart(&self) -> Result<()>;
     async fn ensure_no_fullnode_restart(&self) -> Result<()>;
 
-    async fn ensure_healthy_system_metrics(
-        &mut self,
-        start_time: i64,
-        end_time: i64,
-        threshold: SystemMetricsThreshold,
-    ) -> Result<()>;
-
     // Get prometheus metrics from the swarm
     async fn query_metrics(
         &self,
@@ -99,6 +91,14 @@ pub trait Swarm: Sync {
         time: Option<i64>,
         timeout: Option<i64>,
     ) -> Result<PromqlResult>;
+
+    async fn query_range_metrics(
+        &self,
+        query: &str,
+        start_time: i64,
+        end_time: i64,
+        timeout: Option<i64>,
+    ) -> Result<Vec<Sample>>;
 
     fn aptos_public_info(&mut self) -> AptosPublicInfo<'_> {
         self.chain_info().into_aptos_public_info()
@@ -109,6 +109,8 @@ pub trait Swarm: Sync {
     fn aptos_public_info_for_node(&mut self, idx: usize) -> AptosPublicInfo<'_> {
         self.chain_info_for_node(idx).into_aptos_public_info()
     }
+
+    fn get_default_pfn_node_config(&self) -> NodeConfig;
 }
 
 impl<T: ?Sized> SwarmExt for T where T: Swarm {}

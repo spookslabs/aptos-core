@@ -300,6 +300,10 @@ impl FunctionTargetsHolder {
 }
 
 impl FunctionTargetPipeline {
+    pub fn is_empty(&self) -> bool {
+        self.processors.is_empty()
+    }
+
     /// Adds a processor to this pipeline. Processor will be called in the order they have been
     /// added.
     pub fn add_processor(&mut self, processor: Box<dyn FunctionTargetProcessor>) {
@@ -333,6 +337,11 @@ impl FunctionTargetPipeline {
             let src_idx = nodes.get(&fun_id).unwrap();
             let fun_env = env.get_function(fun_id);
             for callee in fun_env.get_called_functions().expect("called functions") {
+                assert!(
+                    nodes.contains_key(callee),
+                    "{}",
+                    env.get_function(*callee).get_full_name_str()
+                );
                 let dst_idx = nodes
                     .get(callee)
                     .expect("callee is not in function targets");

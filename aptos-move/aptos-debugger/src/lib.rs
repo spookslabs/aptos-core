@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{format_err, Result};
-use aptos_gas::{
-    AbstractValueSizeGasParameters, ChangeSetConfigs, NativeGasParameters, StandardGasMeter,
-    LATEST_GAS_FEATURE_VERSION,
-};
+use aptos_gas_meter::{StandardGasAlgebra, StandardGasMeter};
 use aptos_gas_profiling::{GasProfiler, TransactionGasLog};
+use aptos_gas_schedule::{MiscGasParameters, NativeGasParameters, LATEST_GAS_FEATURE_VERSION};
+use aptos_memory_usage_tracker::MemoryTrackedGasMeter;
 use aptos_resource_viewer::{AnnotatedAccountStateBlob, AptosValueAnnotator};
 use aptos_rest_client::Client;
 use aptos_state_view::TStateView;
@@ -15,8 +14,8 @@ use aptos_types::{
     chain_id::ChainId,
     on_chain_config::{Features, OnChainConfig, TimedFeatures},
     transaction::{
-        ChangeSet, SignedTransaction, Transaction, TransactionInfo, TransactionOutput,
-        TransactionPayload, Version,
+        SignedTransaction, Transaction, TransactionInfo, TransactionOutput, TransactionPayload,
+        Version,
     },
     vm_status::VMStatus,
 };
@@ -29,6 +28,7 @@ use aptos_vm::{
     AptosVM, VMExecutor,
 };
 use aptos_vm_logging::log_schema::AdapterLogSchema;
+use aptos_vm_types::{change_set::VMChangeSet, output::VMOutput, storage::ChangeSetConfigs};
 use move_binary_format::errors::VMResult;
 use std::{path::Path, sync::Arc};
 
@@ -57,7 +57,7 @@ impl AptosDebugger {
         txns: Vec<Transaction>,
     ) -> Result<Vec<TransactionOutput>> {
         let state_view = DebuggerStateView::new(self.debugger.clone(), version);
-        AptosVM::execute_block(txns, &state_view)
+        AptosVM::execute_block(txns, &state_view, None)
             .map_err(|err| format_err!("Unexpected VM Error: {:?}", err))
     }
 
@@ -65,7 +65,7 @@ impl AptosDebugger {
         &self,
         version: Version,
         txn: SignedTransaction,
-    ) -> Result<(VMStatus, TransactionOutput, TransactionGasLog)> {
+    ) -> Result<(VMStatus, VMOutput, TransactionGasLog)> {
         let state_view = DebuggerStateView::new(self.debugger.clone(), version);
         let log_context = AdapterLogSchema::new(state_view.id(), 0);
         let txn = txn
@@ -78,12 +78,13 @@ impl AptosDebugger {
                 &txn,
                 &log_context,
                 |gas_feature_version, gas_params, storage_gas_params, balance| {
-                    let gas_meter = StandardGasMeter::new(
-                        gas_feature_version,
-                        gas_params,
-                        storage_gas_params,
-                        balance,
-                    );
+                    let gas_meter =
+                        MemoryTrackedGasMeter::new(StandardGasMeter::new(StandardGasAlgebra::new(
+                            gas_feature_version,
+                            gas_params,
+                            storage_gas_params,
+                            balance,
+                        )));
                     let gas_profiler = match txn.payload() {
                         TransactionPayload::Script(_) => GasProfiler::new_script(gas_meter),
                         TransactionPayload::EntryFunction(entry_func) => GasProfiler::new_function(
@@ -218,7 +219,7 @@ impl AptosDebugger {
             .await
     }
 
-    pub fn run_session_at_version<F>(&self, version: Version, f: F) -> Result<ChangeSet>
+    pub fn run_session_at_version<F>(&self, version: Version, f: F) -> Result<VMChangeSet>
     where
         F: FnOnce(&mut SessionExt) -> VMResult<()>,
     {
@@ -227,22 +228,21 @@ impl AptosDebugger {
         let features = Features::fetch_config(&state_view_storage).unwrap_or_default();
         let move_vm = MoveVmExt::new(
             NativeGasParameters::zeros(),
-            AbstractValueSizeGasParameters::zeros(),
+            MiscGasParameters::zeros(),
             LATEST_GAS_FEATURE_VERSION,
             ChainId::test().id(),
             features,
             TimedFeatures::enable_all(),
         )
         .unwrap();
-        let mut session = move_vm.new_session(&state_view_storage, SessionId::Void, true);
+        let mut session = move_vm.new_session(&state_view_storage, SessionId::Void);
         f(&mut session).map_err(|err| format_err!("Unexpected VM Error: {:?}", err))?;
-        let change_set_ext = session
+        let change_set = session
             .finish(
                 &mut (),
                 &ChangeSetConfigs::unlimited_at_gas_feature_version(LATEST_GAS_FEATURE_VERSION),
             )
             .map_err(|err| format_err!("Unexpected VM Error: {:?}", err))?;
-        let (_delta_change_set, change_set) = change_set_ext.into_inner();
         Ok(change_set)
     }
 }

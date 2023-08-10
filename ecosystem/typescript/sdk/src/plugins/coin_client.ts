@@ -1,11 +1,15 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
-
 import { AptosAccount, getAddressFromAccountOrAddress } from "../account/aptos_account";
 import { AptosClient, OptionalTransactionArgs } from "../providers/aptos_client";
-import { MaybeHexString, APTOS_COIN } from "../utils";
+import { MaybeHexString, APTOS_COIN, NetworkToIndexerAPI, NodeAPIToNetwork } from "../utils";
 import { TransactionBuilderRemoteABI } from "../transaction_builder";
+import { FungibleAssetClient } from "./fungible_asset_client";
+import { Provider } from "../providers";
+import { AccountAddress } from "../aptos_types";
 
+export const TRANSFER_COINS = "0x1::aptos_account::transfer_coins";
+export const COIN_TRANSFER = "0x1::coin::transfer";
 /**
  * Class for working with the coin module, such as transferring coins and
  * checking balances.
@@ -32,6 +36,11 @@ export class CoinClient {
    * this to true, the transaction will fail if the receiver account does not
    * exist on-chain.
    *
+   * The TS SDK supports fungible assets operations. If you want to use CoinClient
+   * with this feature, set the `coinType` to be the fungible asset metadata address.
+   * This option uses the `FungibleAssetClient` class and queries the
+   * fungible asset primary store.
+   *
    * @param from Account sending the coins
    * @param to Account to receive the coins
    * @param amount Number of coins to transfer
@@ -45,8 +54,10 @@ export class CoinClient {
     to: AptosAccount | MaybeHexString,
     amount: number | bigint,
     extraArgs?: OptionalTransactionArgs & {
-      // The coin type to use, defaults to 0x1::aptos_coin::AptosCoin
-      coinType?: string;
+      // The coin type to use, defaults to 0x1::aptos_coin::AptosCoin.
+      // If you want to transfer a fungible asset, set this param to be the
+      // fungible asset address
+      coinType?: string | MaybeHexString;
       // If set, create the `receiver` account if it doesn't exist on-chain.
       // This is done by calling `0x1::aptos_account::transfer` instead, which
       // will create the account on-chain first if it doesn't exist before
@@ -56,18 +67,40 @@ export class CoinClient {
       createReceiverIfMissing?: boolean;
     },
   ): Promise<string> {
+    if (extraArgs?.coinType && AccountAddress.isValid(extraArgs.coinType)) {
+      /* eslint-disable no-console */
+      console.warn("to transfer a fungible asset, use `FungibleAssetClient()` class for better support");
+      const provider = new Provider({
+        fullnodeUrl: this.aptosClient.nodeUrl,
+        indexerUrl: NetworkToIndexerAPI[NodeAPIToNetwork[this.aptosClient.nodeUrl]] ?? this.aptosClient.nodeUrl,
+      });
+      const fungibleAsset = new FungibleAssetClient(provider);
+      const txnHash = await fungibleAsset.transfer(
+        from,
+        extraArgs?.coinType,
+        getAddressFromAccountOrAddress(to),
+        amount,
+      );
+      return txnHash;
+    }
+
     // If none is explicitly given, use 0x1::aptos_coin::AptosCoin as the coin type.
     const coinTypeToTransfer = extraArgs?.coinType ?? APTOS_COIN;
 
     // If we should create the receiver account if it doesn't exist on-chain,
-    // use the `0x1::aptos_account::transfer` function.
-    const func = extraArgs?.createReceiverIfMissing ? "0x1::aptos_account::transfer_coins" : "0x1::coin::transfer";
+    // use the `0x1::aptos_account::transfer_coins` function.
+    let func: string;
+    if (extraArgs?.createReceiverIfMissing === undefined) {
+      func = TRANSFER_COINS;
+    } else {
+      func = extraArgs?.createReceiverIfMissing ? TRANSFER_COINS : COIN_TRANSFER;
+    }
 
     // Get the receiver address from the AptosAccount or MaybeHexString.
     const toAddress = getAddressFromAccountOrAddress(to);
 
     const builder = new TransactionBuilderRemoteABI(this.aptosClient, { sender: from.address(), ...extraArgs });
-    const rawTxn = await builder.build(func, [coinTypeToTransfer], [toAddress, amount]);
+    const rawTxn = await builder.build(func, [coinTypeToTransfer as string], [toAddress, amount]);
 
     const bcsTxn = AptosClient.generateBCSTransaction(from, rawTxn);
     const pendingTransaction = await this.aptosClient.submitSignedBCSTransaction(bcsTxn);
@@ -78,6 +111,13 @@ export class CoinClient {
    * Get the balance of the account. By default it checks the balance of
    * 0x1::aptos_coin::AptosCoin, but you can specify a different coin type.
    *
+   * to use a different type, set the `coinType` to be the fungible asset type.
+   *
+   * The TS SDK supports fungible assets operations. If you want to use CoinClient
+   * with this feature, set the `coinType` to be the fungible asset metadata address.
+   * This option uses the FungibleAssetClient class and queries the
+   * fungible asset primary store.
+   *
    * @param account Account that you want to get the balance of.
    * @param extraArgs Extra args for checking the balance.
    * @returns Promise that resolves to the balance as a bigint.
@@ -86,10 +126,27 @@ export class CoinClient {
   async checkBalance(
     account: AptosAccount | MaybeHexString,
     extraArgs?: {
-      // The coin type to use, defaults to 0x1::aptos_coin::AptosCoin
+      // The coin type to use, defaults to 0x1::aptos_coin::AptosCoin.
+      // If you want to check the balance of a fungible asset, set this param to be the
+      // fungible asset address
       coinType?: string;
     },
   ): Promise<bigint> {
+    if (extraArgs?.coinType && AccountAddress.isValid(extraArgs.coinType)) {
+      /* eslint-disable no-console */
+      console.warn("to check balance of a fungible asset, use `FungibleAssetClient()` class for better support");
+      const provider = new Provider({
+        fullnodeUrl: this.aptosClient.nodeUrl,
+        indexerUrl: NetworkToIndexerAPI[NodeAPIToNetwork[this.aptosClient.nodeUrl]] ?? this.aptosClient.nodeUrl,
+      });
+      const fungibleAsset = new FungibleAssetClient(provider);
+      const balance = await fungibleAsset.getPrimaryBalance(
+        getAddressFromAccountOrAddress(account),
+        extraArgs?.coinType,
+      );
+      return balance;
+    }
+
     const coinType = extraArgs?.coinType ?? APTOS_COIN;
     const typeTag = `0x1::coin::CoinStore<${coinType}>`;
     const address = getAddressFromAccountOrAddress(account);

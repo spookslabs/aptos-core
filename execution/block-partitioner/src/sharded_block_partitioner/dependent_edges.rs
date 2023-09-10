@@ -6,10 +6,10 @@ use crate::sharded_block_partitioner::cross_shard_messages::{
 };
 use aptos_types::{
     block_executor::partitioner::{
-        CrossShardDependencies, CrossShardEdges, ShardId, ShardedTxnIndex, SubBlocksForShard,
+        CrossShardDependencies, CrossShardEdges, ShardId, SubBlocksForShard, TxnIdxWithShardId,
         TxnIndex,
     },
-    transaction::analyzed_transaction::AnalyzedTransaction,
+    transaction::Transaction,
 };
 use itertools::Itertools;
 use std::{collections::HashMap, sync::Arc};
@@ -17,9 +17,8 @@ use std::{collections::HashMap, sync::Arc};
 pub struct DependentEdgeCreator {
     shard_id: ShardId,
     cross_shard_client: Arc<dyn CrossShardClientInterface>,
-    froze_sub_blocks: SubBlocksForShard<AnalyzedTransaction>,
+    froze_sub_blocks: SubBlocksForShard<Transaction>,
     num_shards: usize,
-    round_id: usize,
 }
 
 /// Creates a list of dependent edges for each sub block in the current round. It works in following steps
@@ -34,16 +33,14 @@ impl DependentEdgeCreator {
     pub fn new(
         shard_id: ShardId,
         cross_shard_client: Arc<dyn CrossShardClientInterface>,
-        froze_sub_blocks: SubBlocksForShard<AnalyzedTransaction>,
+        froze_sub_blocks: SubBlocksForShard<Transaction>,
         num_shards: usize,
-        round_id: usize,
     ) -> Self {
         Self {
             shard_id,
             cross_shard_client,
             froze_sub_blocks,
             num_shards,
-            round_id,
         }
     }
 
@@ -84,7 +81,7 @@ impl DependentEdgeCreator {
                 .entry(index_with_shard.txn_index)
                 .or_insert_with(CrossShardEdges::default);
             back_edges.add_edge(
-                ShardedTxnIndex::new(dependent_index, self.shard_id, self.round_id),
+                TxnIdxWithShardId::new(dependent_index, self.shard_id),
                 storage_locations.clone(),
             );
         }
@@ -159,7 +156,7 @@ impl DependentEdgeCreator {
         }
     }
 
-    pub fn into_frozen_sub_blocks(self) -> SubBlocksForShard<AnalyzedTransaction> {
+    pub fn into_frozen_sub_blocks(self) -> SubBlocksForShard<Transaction> {
         self.froze_sub_blocks
     }
 }
@@ -175,8 +172,8 @@ mod tests {
     };
     use aptos_types::{
         block_executor::partitioner::{
-            CrossShardDependencies, CrossShardEdges, ShardedTxnIndex, SubBlock, SubBlocksForShard,
-            TransactionWithDependencies,
+            CrossShardDependencies, CrossShardEdges, SubBlock, SubBlocksForShard,
+            TransactionWithDependencies, TxnIdxWithShardId,
         },
         transaction::analyzed_transaction::StorageLocation,
     };
@@ -188,7 +185,7 @@ mod tests {
         let shard_id = 0;
         let start_index = 0;
         let num_shards = 3;
-        let round_id = 999;
+
         let mut transactions_with_deps = Vec::new();
         for _ in 0..10 {
             transactions_with_deps.push(TransactionWithDependencies::new(
@@ -207,7 +204,7 @@ mod tests {
         dependent_edges_from_shard_1.push(CrossShardDependentEdges::new(
             4,
             CrossShardEdges::new(
-                ShardedTxnIndex::new(11, 1, round_id),
+                TxnIdxWithShardId::new(11, 1),
                 txn_4_storgae_location.clone(),
             ),
         ));
@@ -215,7 +212,7 @@ mod tests {
         dependent_edges_from_shard_1.push(CrossShardDependentEdges::new(
             5,
             CrossShardEdges::new(
-                ShardedTxnIndex::new(12, 1, round_id),
+                TxnIdxWithShardId::new(12, 1),
                 txn_5_storgae_location.clone(),
             ),
         ));
@@ -226,7 +223,7 @@ mod tests {
             CrossShardDependentEdges::new(
                 4,
                 CrossShardEdges::new(
-                    ShardedTxnIndex::new(21, 2, round_id),
+                    TxnIdxWithShardId::new(21, 2),
                     txn_4_storgae_location.clone(),
                 ),
             ),
@@ -234,7 +231,7 @@ mod tests {
             CrossShardDependentEdges::new(
                 5,
                 CrossShardEdges::new(
-                    ShardedTxnIndex::new(22, 2, round_id),
+                    TxnIdxWithShardId::new(22, 2),
                     txn_5_storgae_location.clone(),
                 ),
             ),
@@ -254,7 +251,7 @@ mod tests {
                 .iter()
                 .map(|txn_with_deps| {
                     TransactionWithDependencies::new(
-                        txn_with_deps.txn.clone(),
+                        txn_with_deps.txn.transaction().clone(),
                         txn_with_deps.cross_shard_dependencies.clone(),
                     )
                 })
@@ -262,13 +259,8 @@ mod tests {
         );
         sub_blocks.add_sub_block(sub_block);
 
-        let mut dependent_edge_creator = DependentEdgeCreator::new(
-            shard_id,
-            cross_shard_client,
-            sub_blocks,
-            num_shards,
-            round_id,
-        );
+        let mut dependent_edge_creator =
+            DependentEdgeCreator::new(shard_id, cross_shard_client, sub_blocks, num_shards);
 
         dependent_edge_creator.create_dependent_edges(&[], 0);
 
@@ -279,25 +271,25 @@ mod tests {
 
         let dependent_storage_locs = sub_block.transactions_with_deps()[4]
             .cross_shard_dependencies
-            .get_dependent_edge_for(ShardedTxnIndex::new(11, 1, round_id))
+            .get_dependent_edge_for(TxnIdxWithShardId::new(11, 1))
             .unwrap();
         assert_eq!(dependent_storage_locs, &txn_4_storgae_location);
 
         let dependent_storage_locs = sub_block.transactions_with_deps()[5]
             .cross_shard_dependencies
-            .get_dependent_edge_for(ShardedTxnIndex::new(12, 1, round_id))
+            .get_dependent_edge_for(TxnIdxWithShardId::new(12, 1))
             .unwrap();
         assert_eq!(dependent_storage_locs, &txn_5_storgae_location);
 
         let dependent_storage_locs = sub_block.transactions_with_deps()[4]
             .cross_shard_dependencies
-            .get_dependent_edge_for(ShardedTxnIndex::new(21, 2, round_id))
+            .get_dependent_edge_for(TxnIdxWithShardId::new(21, 2))
             .unwrap();
         assert_eq!(dependent_storage_locs, &txn_4_storgae_location);
 
         let dependent_storage_locs = sub_block.transactions_with_deps()[5]
             .cross_shard_dependencies
-            .get_dependent_edge_for(ShardedTxnIndex::new(22, 2, round_id))
+            .get_dependent_edge_for(TxnIdxWithShardId::new(22, 2))
             .unwrap();
         assert_eq!(dependent_storage_locs, &txn_5_storgae_location);
     }

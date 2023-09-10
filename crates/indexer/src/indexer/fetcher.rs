@@ -118,7 +118,7 @@ impl Fetcher {
                         highest_known_version,
                         num_transactions_to_fetch,
                     )
-                    .await
+                        .await
                 });
                 tasks.push(task);
                 starting_version += num_transactions_to_fetch as u64;
@@ -225,7 +225,7 @@ async fn fetch_nexts(
         num_transactions_to_fetch,
         3,
     )
-    .await;
+        .await;
 
     let (_, _, block_event) = context
         .db
@@ -338,8 +338,8 @@ pub struct TransactionFetcherOptions {
 }
 
 fn default_if_zero<T>(value: Option<T>, default: T) -> T
-where
-    T: PartialEq + Copy + Default,
+    where
+        T: PartialEq + Copy + Default,
 {
     match value {
         Some(v) => {

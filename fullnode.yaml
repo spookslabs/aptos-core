@@ -25,8 +25,9 @@ storage:
 indexer:
   enabled: true
   check_chain_id: true
-  emit_every: 100
+  emit_every: 0
+  batch_size: 1000
   postgres_uri: "postgres://postgres@localhost:5432/postgres"
   processor: "coin_processor"
-  fetch_tasks: 10
-  processor_tasks: 10
+  fetch_tasks: 16
+  processor_tasks: 16

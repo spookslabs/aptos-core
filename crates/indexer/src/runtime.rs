@@ -1,17 +1,12 @@
 // Copyright © Aptos Foundation
+
+// Copyright (c) Aptos
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    database::new_db_pool,
     indexer::{
-        fetcher::TransactionFetcherOptions, processing_result::ProcessingResult, tailer::Tailer,
-        transaction_processor::TransactionProcessor,
-    },
-    processors::{
-        coin_processor::CoinTransactionProcessor, default_processor::DefaultTransactionProcessor,
-        stake_processor::StakeTransactionProcessor, token_processor::TokenTransactionProcessor,
-        Processor,
-    },
+        fetcher::TransactionFetcherOptions, processing_result::{EndpointTransaction, EndpointRequest}, tailer::Tailer
+    }
 };
 use aptos_api::context::Context;
 use aptos_config::config::{IndexerConfig, NodeConfig};
@@ -19,57 +14,22 @@ use aptos_logger::{error, info};
 use aptos_mempool::MempoolClientSender;
 use aptos_storage_interface::DbReader;
 use aptos_types::chain_id::ChainId;
+use serde::{Serialize, Deserialize};
 use std::{collections::VecDeque, sync::Arc};
-use tokio::runtime::Runtime;
+use tokio::runtime::{Builder, Runtime};
+use tokio_tungstenite::{connect_async, tungstenite::protocol::Message, accept_async};
+use futures::{StreamExt, TryStreamExt, TryFutureExt, SinkExt, Stream, FutureExt};
 
-pub struct MovingAverage {
-    window_millis: u64,
-    // (timestamp_millis, value)
-    values: VecDeque<(u64, u64)>,
-    sum: u64,
-}
+const ENDPOINT: &str = "http://127.0.0.1:34789/aptos";
 
-impl MovingAverage {
-    pub fn new(window_millis: u64) -> Self {
-        Self {
-            window_millis,
-            values: VecDeque::new(),
-            sum: 0,
-        }
-    }
+const WEBSOCKET_ENDPOINT: &str = "ws://127.0.0.1:34788/sync";
 
-    pub fn tick_now(&mut self, value: u64) {
-        let now = chrono::Utc::now().naive_utc().timestamp_millis() as u64;
-        self.tick(now, value);
-    }
-
-    pub fn tick(&mut self, timestamp_millis: u64, value: u64) -> f64 {
-        self.values.push_back((timestamp_millis, value));
-        self.sum += value;
-        loop {
-            match self.values.front() {
-                None => break,
-                Some((ts, val)) => {
-                    if timestamp_millis - ts > self.window_millis {
-                        self.sum -= val;
-                        self.values.pop_front();
-                    } else {
-                        break;
-                    }
-                },
-            }
-        }
-        self.avg()
-    }
-
-    pub fn avg(&self) -> f64 {
-        if self.values.len() < 2 {
-            0.0
-        } else {
-            let elapsed = self.values.back().unwrap().0 - self.values.front().unwrap().0;
-            self.sum as f64 / elapsed as f64
-        }
-    }
+#[derive(Deserialize)]
+struct HandshakeResponse {
+    pub version: u64,
+    pub events: Vec<String>,
+    pub resources: Vec<String>,
+    pub handles: Vec<String>
 }
 
 /// Creates a runtime which creates a thread pool which reads from storage and writes to postgres
@@ -84,7 +44,12 @@ pub fn bootstrap(
         return None;
     }
 
-    let runtime = aptos_runtimes::spawn_named_runtime("indexer".into(), None);
+    let runtime = Builder::new_multi_thread()
+        .thread_name("indexer")
+        .disable_lifo_slot()
+        .enable_all()
+        .build()
+        .expect("[indexer] failed to create runtime");
 
     let indexer_config = config.indexer.clone();
     let node_config = config.clone();
@@ -100,83 +65,40 @@ pub fn bootstrap(
 pub async fn run_forever(config: IndexerConfig, context: Arc<Context>) {
     // All of these options should be filled already with defaults
     let processor_name = config.processor.clone().unwrap();
-    let check_chain_id = config.check_chain_id.unwrap();
-    let skip_migrations = config.skip_migrations.unwrap();
     let fetch_tasks = config.fetch_tasks.unwrap();
     let processor_tasks = config.processor_tasks.unwrap();
     let emit_every = config.emit_every.unwrap();
     let batch_size = config.batch_size.unwrap();
-    let lookback_versions = config.gap_lookback_versions.unwrap() as i64;
 
     info!(processor_name = processor_name, "Starting indexer...");
 
-    let db_uri = &config.postgres_uri.unwrap();
-    info!(
-        processor_name = processor_name,
-        "Creating connection pool..."
-    );
-    let conn_pool = new_db_pool(db_uri).expect("Failed to create connection pool");
-    info!(
-        processor_name = processor_name,
-        "Created the connection pool... "
-    );
-
     info!(processor_name = processor_name, "Instantiating tailer... ");
 
-    let processor_enum = Processor::from_string(&processor_name);
-    let processor: Arc<dyn TransactionProcessor> = match processor_enum {
-        Processor::DefaultProcessor => {
-            Arc::new(DefaultTransactionProcessor::new(conn_pool.clone()))
-        },
-        Processor::TokenProcessor => Arc::new(TokenTransactionProcessor::new(
-            conn_pool.clone(),
-            config.ans_contract_address,
-            config.nft_points_contract,
-        )),
-        Processor::CoinProcessor => Arc::new(CoinTransactionProcessor::new(conn_pool.clone())),
-        Processor::StakeProcessor => Arc::new(StakeTransactionProcessor::new(conn_pool.clone())),
+    let options =
+        TransactionFetcherOptions::new(Some(100), None, Some(batch_size), None, fetch_tasks as usize);
+
+    let url = url::Url::parse(&WEBSOCKET_ENDPOINT).unwrap();
+    let (ws, _) = connect_async(url).await.unwrap();
+
+    let (mut write, mut read) = ws.split();
+
+    let handshake: HandshakeResponse = match read.next().await.unwrap() {
+        Ok(Message::Text(message)) => serde_json::from_str(&message).unwrap(),
+        _ => panic!("Websocket message is not textual")
     };
 
-    let options =
-        TransactionFetcherOptions::new(None, None, Some(batch_size), None, fetch_tasks as usize);
-
-    let tailer = Tailer::new(context, conn_pool.clone(), processor, options)
+    let tailer = Tailer::new(context, handshake.events, handshake.resources, handshake.handles, options)
         .expect("Failed to instantiate tailer");
 
-    if !skip_migrations {
-        info!(processor_name = processor_name, "Running migrations...");
-        tailer.run_migrations();
-    }
-
-    info!(
-        processor_name = processor_name,
-        lookback_versions = lookback_versions,
-        "Fetching starting version from db..."
-    );
-    // For now this is not being used but we'd want to track it anyway
-    let starting_version_from_db_short = tailer
-        .get_start_version(&processor_name)
-        .unwrap_or_else(|e| panic!("Failed to get starting version: {:?}", e))
-        .unwrap_or_else(|| {
-            info!(
-                processor_name = processor_name,
-                "No starting version from db so starting from version 0"
-            );
-            0
-        }) as u64;
-    let start_version = match config.starting_version {
-        None => starting_version_from_db_short,
-        Some(version) => version,
-    };
+    let start_version = handshake.version;
 
     info!(
         processor_name = processor_name,
         final_start_version = start_version,
         start_version_from_config = config.starting_version,
-        starting_version_from_db = starting_version_from_db_short,
         "Setting starting version..."
     );
-    tailer.set_fetcher_version(start_version).await;
+    tailer.set_fetcher_version(start_version as u64).await;
 
     info!(processor_name = processor_name, "Starting fetcher...");
     tailer.transaction_fetcher.lock().await.start().await;
@@ -190,16 +112,6 @@ pub async fn run_forever(config: IndexerConfig, context: Arc<Context>) {
     let mut versions_processed: u64 = 0;
     let mut base: u64 = 0;
 
-    // Check once here to avoid a boolean check every iteration
-    if check_chain_id {
-        tailer
-            .check_or_update_chain_id()
-            .await
-            .expect("Failed to get chain ID");
-    }
-
-    let mut ma = MovingAverage::new(10_000);
-
     loop {
         let mut tasks = vec![];
         for _ in 0..processor_tasks {
@@ -212,63 +124,35 @@ pub async fn run_forever(config: IndexerConfig, context: Arc<Context>) {
             Err(err) => panic!("Error processing transaction batches: {:?}", err),
         };
 
+        let mut transactions: Vec<EndpointTransaction> = vec![];
+
         let mut batch_start_version = u64::MAX;
         let mut batch_end_version = 0;
         let mut num_res = 0;
 
         for (num_txn, res) in batches {
-            let processed_result: ProcessingResult = match res {
-                // When the batch is empty b/c we're caught up, continue to next batch
-                None => continue,
-                Some(Ok(res)) => res,
-                Some(Err(tpe)) => {
-                    let (err, start_version, end_version, _) = tpe.inner();
-                    error!(
-                        processor_name = processor_name,
-                        start_version = start_version,
-                        end_version = end_version,
-                        error =? err,
-                        "Error processing batch!"
-                    );
-                    panic!(
-                        "Error in '{}' while processing batch: {:?}",
-                        processor_name, err
-                    );
-                },
+            if let Some(processed_result) = res {
+                batch_start_version =
+                    std::cmp::min(batch_start_version, processed_result.start_version);
+                batch_end_version = std::cmp::max(batch_end_version, processed_result.end_version);
+                num_res += num_txn;
+                transactions.extend(processed_result.transactions);
             };
-            batch_start_version =
-                std::cmp::min(batch_start_version, processed_result.start_version);
-            batch_end_version = std::cmp::max(batch_end_version, processed_result.end_version);
-            num_res += num_txn;
         }
 
-        tailer
-            .update_last_processed_version(&processor_name, batch_end_version)
-            .unwrap_or_else(|e| {
-                error!(
-                    processor_name = processor_name,
-                    end_version = batch_end_version,
-                    error = format!("{:?}", e),
-                    "Failed to update last processed version!"
-                );
-                panic!("Failed to update last processed version: {:?}", e);
-            });
+        if !transactions.is_empty() {
 
-        ma.tick_now(num_res);
+            info!(
+                versions = transactions.iter().map(|transaction| transaction.version).collect::<Vec<u64>>(),
+                "Sending transactions to endpoint"
+            );
 
-        versions_processed += num_res;
-        if emit_every != 0 {
-            let new_base: u64 = versions_processed / emit_every;
-            if base != new_base {
-                base = new_base;
-                info!(
-                    processor_name = processor_name,
-                    batch_start_version = batch_start_version,
-                    batch_end_version = batch_end_version,
-                    versions_processed = versions_processed,
-                    tps = (ma.avg() * 1000.0) as u64,
-                    "Processed batch version"
-                );
+            transactions.sort_by(|a, b| a.version.cmp(&b.version));
+
+            // can't make this shit async, need to await or it doesn't work
+            let request = EndpointRequest { transactions };
+            if let Err(error) = write.send(Message::Text(serde_json::to_string(&request).unwrap())).await {
+                panic!("Could not send transactions: {:?}", error);
             }
         }
     }

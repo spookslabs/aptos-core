@@ -215,7 +215,8 @@ impl<'a> Analyzer<'a> {
 
         // Next do todo-list for regular functions, while self.inst_opt contains the
         // specific instantiation.
-        while let Some((fun, variant, inst)) = self.todo_funs.pop() {
+        while !self.todo_funs.is_empty() {
+            let (fun, variant, inst) = self.todo_funs.pop().unwrap();
             self.inst_opt = Some(inst);
             self.analyze_fun(
                 self.targets
@@ -242,7 +243,8 @@ impl<'a> Analyzer<'a> {
         }
 
         // Finally do spec functions, after all regular functions and axioms are done.
-        while let Some((fun, inst)) = self.todo_spec_funs.pop() {
+        while !self.todo_spec_funs.is_empty() {
+            let (fun, inst) = self.todo_spec_funs.pop().unwrap();
             self.inst_opt = Some(inst);
             self.analyze_spec_fun(fun);
             let inst = std::mem::take(&mut self.inst_opt).unwrap();

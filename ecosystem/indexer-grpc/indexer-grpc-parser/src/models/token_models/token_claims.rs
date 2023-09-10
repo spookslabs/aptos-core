@@ -28,8 +28,6 @@ pub struct CurrentTokenPendingClaim {
     pub table_handle: String,
     pub last_transaction_version: i64,
     pub last_transaction_timestamp: chrono::NaiveDateTime,
-    pub token_data_id: String,
-    pub collection_id: String,
 }
 
 impl CurrentTokenPendingClaim {
@@ -51,7 +49,7 @@ impl CurrentTokenPendingClaim {
             Some(TokenWriteSet::TokenOfferId(inner)) => Some(inner),
             _ => None,
         };
-        if let Some(offer) = &maybe_offer {
+        if let Some(offer) = maybe_offer {
             let maybe_token = match TokenWriteSet::from_table_item_type(
                 table_item_data.value_type.as_str(),
                 &table_item_data.value,
@@ -60,38 +58,32 @@ impl CurrentTokenPendingClaim {
                 Some(TokenWriteSet::Token(inner)) => Some(inner),
                 _ => None,
             };
-            if let Some(token) = &maybe_token {
+            if let Some(token) = maybe_token {
                 let table_handle = standardize_address(&table_item.handle.to_string());
 
                 let maybe_table_metadata = table_handle_to_owner.get(&table_handle);
 
                 if let Some(table_metadata) = maybe_table_metadata {
-                    let token_id = offer.token_id.clone();
-                    let token_data_id_struct = token_id.token_data_id;
-                    let collection_data_id_hash =
-                        token_data_id_struct.get_collection_data_id_hash();
-                    let token_data_id_hash = token_data_id_struct.to_hash();
-                    // Basically adding 0x prefix to the previous 2 lines. This is to be consistent with Token V2
-                    let collection_id = token_data_id_struct.get_collection_id();
-                    let token_data_id = token_data_id_struct.to_id();
-                    let collection_name = token_data_id_struct.get_collection_trunc();
-                    let name = token_data_id_struct.get_name_trunc();
+                    let token_id = offer.token_id;
+                    let token_data_id = token_id.token_data_id;
+                    let collection_data_id_hash = token_data_id.get_collection_data_id_hash();
+                    let token_data_id_hash = token_data_id.to_hash();
+                    let collection_name = token_data_id.get_collection_trunc();
+                    let name = token_data_id.get_name_trunc();
 
                     return Ok(Some(Self {
                         token_data_id_hash,
                         property_version: token_id.property_version,
-                        from_address: table_metadata.get_owner_address(),
-                        to_address: offer.get_to_address(),
+                        from_address: standardize_address(&table_metadata.owner_address),
+                        to_address: standardize_address(&offer.to_addr),
                         collection_data_id_hash,
-                        creator_address: token_data_id_struct.get_creator_address(),
+                        creator_address: standardize_address(&token_data_id.creator),
                         collection_name,
                         name,
-                        amount: token.amount.clone(),
+                        amount: token.amount,
                         table_handle,
                         last_transaction_version: txn_version,
                         last_transaction_timestamp: txn_timestamp,
-                        token_data_id,
-                        collection_id,
                     }));
                 } else {
                     tracing::warn!(
@@ -129,7 +121,7 @@ impl CurrentTokenPendingClaim {
             Some(TokenWriteSet::TokenOfferId(inner)) => Some(inner),
             _ => None,
         };
-        if let Some(offer) = &maybe_offer {
+        if let Some(offer) = maybe_offer {
             let table_handle = standardize_address(&table_item.handle.to_string());
 
             let table_metadata = table_handle_to_owner.get(&table_handle).unwrap_or_else(|| {
@@ -140,31 +132,26 @@ impl CurrentTokenPendingClaim {
                 )
             });
 
-            let token_id = offer.token_id.clone();
-            let token_data_id_struct = token_id.token_data_id;
-            let collection_data_id_hash = token_data_id_struct.get_collection_data_id_hash();
-            let token_data_id_hash = token_data_id_struct.to_hash();
-            // Basically adding 0x prefix to the previous 2 lines. This is to be consistent with Token V2
-            let collection_id = token_data_id_struct.get_collection_id();
-            let token_data_id = token_data_id_struct.to_id();
-            let collection_name = token_data_id_struct.get_collection_trunc();
-            let name = token_data_id_struct.get_name_trunc();
+            let token_id = offer.token_id;
+            let token_data_id = token_id.token_data_id;
+            let collection_data_id_hash = token_data_id.get_collection_data_id_hash();
+            let token_data_id_hash = token_data_id.to_hash();
+            let collection_name = token_data_id.get_collection_trunc();
+            let name = token_data_id.get_name_trunc();
 
             return Ok(Some(Self {
                 token_data_id_hash,
                 property_version: token_id.property_version,
-                from_address: table_metadata.get_owner_address(),
-                to_address: offer.get_to_address(),
+                from_address: standardize_address(&table_metadata.owner_address),
+                to_address: standardize_address(&offer.to_addr),
                 collection_data_id_hash,
-                creator_address: token_data_id_struct.get_creator_address(),
+                creator_address: standardize_address(&token_data_id.creator),
                 collection_name,
                 name,
                 amount: BigDecimal::zero(),
                 table_handle,
                 last_transaction_version: txn_version,
                 last_transaction_timestamp: txn_timestamp,
-                token_data_id,
-                collection_id,
             }));
         }
         Ok(None)

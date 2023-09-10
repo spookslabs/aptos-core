@@ -33,7 +33,6 @@ aptos-executor-types = { workspace = true }
 aptos-framework = { workspace = true }
 aptos-genesis = { workspace = true }
 aptos-indexer = { workspace = true, optional = true }
-aptos-indexer-http = { workspace = true, optional = true }
 aptos-indexer-grpc-fullnode = { workspace = true }
 aptos-infallible = { workspace = true }
 aptos-inspection-service = { workspace = true }
@@ -84,6 +83,6 @@ check-vm-features = []
 consensus-only-perf-test = ["aptos-executor/consensus-only-perf-test", "aptos-mempool/consensus-only-perf-test", "aptos-db/consensus-only-perf-test"]
 default = []
 failpoints = ["fail/failpoints", "aptos-consensus/failpoints", "aptos-executor/failpoints", "aptos-mempool/failpoints", "aptos-api/failpoints", "aptos-config/failpoints"]
-indexer = ["aptos-indexer-http"]
+indexer = ["aptos-indexer"]
 network-perf-test = ["aptos-peer-monitoring-service-client/network-perf-test", "aptos-peer-monitoring-service-server/network-perf-test", "aptos-peer-monitoring-service-types/network-perf-test", "aptos-config/network-perf-test"]
 tokio-console = ["aptos-logger/tokio-console", "aptos-config/tokio-console"]

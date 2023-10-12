@@ -1831,9 +1831,11 @@ dependencies = [
  "aptos-api-types",
  "aptos-bitvec",
  "aptos-config",
+ "aptos-indexer-grpc-fullnode",
  "aptos-logger",
  "aptos-mempool",
  "aptos-metrics-core",
+ "aptos-protos",
  "aptos-storage-interface",
  "aptos-types",
  "aptos-vm",
@@ -1854,7 +1856,9 @@ dependencies = [
  "serde_json",
  "sha2 0.9.9",
  "tokio",
+ "tokio-stream",
  "tokio-tungstenite",
+ "tonic 0.8.3",
  "url",
 ]
 

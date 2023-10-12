@@ -19,10 +19,22 @@ use std::{collections::VecDeque, sync::Arc};
 use tokio::runtime::{Builder, Runtime};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message, accept_async};
 use futures::{StreamExt, TryStreamExt, TryFutureExt, SinkExt, Stream, FutureExt};
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
+use tonic::{transport::Server, Request, Response, Status};
 
-const ENDPOINT: &str = "http://127.0.0.1:34789/aptos";
+use aptos_indexer_grpc_fullnode::stream_coordinator::IndexerStreamCoordinator;
+use aptos_protos::internal::fullnode::v1::{
+    fullnode_data_server::{FullnodeData, FullnodeDataServer},
+    stream_status::StatusType,
+    transactions_from_node_response, GetTransactionsFromNodeRequest, StreamStatus,
+    TransactionsFromNodeResponse,
+};
+use aptos_protos::internal::fullnode::v1::transactions_from_node_response::Response::Data;
 
 const WEBSOCKET_ENDPOINT: &str = "ws://127.0.0.1:34788/sync";
+
+const TRANSACTION_CHANNEL_SIZE: usize = 35;
 
 #[derive(Deserialize)]
 struct HandshakeResponse {
@@ -40,6 +52,7 @@ pub fn bootstrap(
     db: Arc<dyn DbReader>,
     mp_sender: MempoolClientSender,
 ) -> Option<anyhow::Result<Runtime>> {
+
     if !config.indexer.enabled {
         return None;
     }
@@ -70,6 +83,8 @@ pub async fn run_forever(config: IndexerConfig, context: Arc<Context>) {
     let emit_every = config.emit_every.unwrap();
     let batch_size = config.batch_size.unwrap();
 
+    let ledger_chain_id = context.chain_id().id();
+
     info!(processor_name = processor_name, "Starting indexer...");
 
     info!(processor_name = processor_name, "Instantiating tailer... ");
@@ -80,28 +95,20 @@ pub async fn run_forever(config: IndexerConfig, context: Arc<Context>) {
     let url = url::Url::parse(&WEBSOCKET_ENDPOINT).unwrap();
     let (ws, _) = connect_async(url).await.unwrap();
 
-    let (mut write, mut read) = ws.split();
+    let (mut writer, mut reader) = ws.split();
 
-    let handshake: HandshakeResponse = match read.next().await.unwrap() {
+    let handshake: HandshakeResponse = match reader.next().await.unwrap() {
         Ok(Message::Text(message)) => serde_json::from_str(&message).unwrap(),
         _ => panic!("Websocket message is not textual")
     };
 
-    let tailer = Tailer::new(context, handshake.events, handshake.resources, handshake.handles, options)
+    let tailer = Tailer::new(context.clone(), handshake.events, handshake.resources, handshake.handles, options)
         .expect("Failed to instantiate tailer");
 
     let start_version = handshake.version;
 
-    info!(
-        processor_name = processor_name,
-        final_start_version = start_version,
-        start_version_from_config = config.starting_version,
-        "Setting starting version..."
-    );
-    tailer.set_fetcher_version(start_version as u64).await;
-
-    info!(processor_name = processor_name, "Starting fetcher...");
-    tailer.transaction_fetcher.lock().await.start().await;
+    // Creates a channel to send the stream to the client
+    let (tx, mut rx) = mpsc::channel(TRANSACTION_CHANNEL_SIZE);
 
     info!(
         processor_name = processor_name,
@@ -112,7 +119,99 @@ pub async fn run_forever(config: IndexerConfig, context: Arc<Context>) {
     let mut versions_processed: u64 = 0;
     let mut base: u64 = 0;
 
+    tokio::spawn(async move {
+
+        // Initialize the coordinator that tracks starting version and processes transactions
+        let mut coordinator = IndexerStreamCoordinator::new(
+            context,
+            start_version,
+            1,
+            4096,
+            4096,
+            tx.clone(),
+        );
+
+        // Sends init message (one time per request) to the client in the with chain id and starting version. Basically a handshake
+        let init_status = get_status(StatusType::Init, start_version, None, ledger_chain_id);
+        match tx.send(Result::<_, Status>::Ok(init_status)).await {
+            Ok(_) => {
+                // TODO: Add request details later
+                info!("[indexer-grpc] Init connection");
+            },
+            Err(_) => {
+                panic!("[indexer-grpc] Unable to initialize stream");
+            },
+        }
+        let mut base: u64 = 0;
+        loop {
+            // Processes and sends batch of transactions to client
+            let results = coordinator.process_next_batch().await;
+            let max_version = match IndexerStreamCoordinator::get_max_batch_version(results) {
+                Ok(max_version) => max_version,
+                Err(e) => {
+                    error!("[indexer-grpc] Error sending to stream: {}", e);
+                    break;
+                },
+            };
+            // send end batch message (each batch) upon success of the entire batch
+            // client can use the start and end version to ensure that there are no gaps
+            // end loop if this message fails to send because otherwise the client can't validate
+            let batch_end_status = get_status(
+                StatusType::BatchEnd,
+                coordinator.current_version,
+                Some(max_version),
+                ledger_chain_id,
+            );
+            if let Err(_) = tx.send(Result::<_, Status>::Ok(batch_end_status)).await {
+                aptos_logger::warn!("[indexer-grpc] Unable to send end batch status");
+                break;
+            }
+            coordinator.current_version = max_version + 1;
+        }
+    });
+
     loop {
+
+        // transactions arrive unsorted when using more than 1 processors
+
+        match rx.recv().await {
+            None => {
+                println!("FUCKING EMPTY!");
+            }
+            Some(value) => {
+                match value {
+                    Err(_) => println!("FUCKING EMPTY 2!"),
+                    Ok(value) => {
+                        if let Some(value) = value.response {
+                            if let Data(value) = value {
+
+                                let mut transactions = tailer.process(&value.transactions);
+
+                                if !transactions.is_empty() {
+
+                                    info!(
+                                        versions = transactions.iter().map(|transaction| transaction.version).collect::<Vec<u64>>(),
+                                        "Sending transactions to endpoint"
+                                    );
+
+                                    transactions.sort_by(|a, b| a.version.cmp(&b.version));
+
+                                    // can't make this shit async, need to await or it doesn't work
+                                    let request = EndpointRequest { transactions };
+                                    if let Err(error) = writer.send(Message::Text(serde_json::to_string(&request).unwrap())).await {
+                                        panic!("Could not send transactions: {:?}", error);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+    }
+
+    /*loop {
         let mut tasks = vec![];
         for _ in 0..processor_tasks {
             let other_tailer = tailer.clone();
@@ -151,9 +250,27 @@ pub async fn run_forever(config: IndexerConfig, context: Arc<Context>) {
 
             // can't make this shit async, need to await or it doesn't work
             let request = EndpointRequest { transactions };
-            if let Err(error) = write.send(Message::Text(serde_json::to_string(&request).unwrap())).await {
+            if let Err(error) = writer.send(Message::Text(serde_json::to_string(&request).unwrap())).await {
                 panic!("Could not send transactions: {:?}", error);
             }
         }
+    }*/
+}
+
+pub fn get_status(
+    status_type: StatusType,
+    start_version: u64,
+    end_version: Option<u64>,
+    ledger_chain_id: u8,
+) -> TransactionsFromNodeResponse {
+    TransactionsFromNodeResponse {
+        response: Some(transactions_from_node_response::Response::Status(
+            StreamStatus {
+                r#type: status_type as i32,
+                start_version,
+                end_version,
+            },
+        )),
+        chain_id: ledger_chain_id as u32,
     }
 }

@@ -666,6 +666,13 @@ impl Context {
             infos.len(),
         );
 
+        /*if let Some(tx) = &transactions_and_outputs.first().unwrap().0.try_as_block_metadata() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                ?.as_millis() as u64;
+            println!("Current delay: {:?}ms", now - tx.timestamp_usecs() / 1000);
+        }*/
+
         transactions_and_outputs
             .into_iter()
             .zip(infos.into_iter())

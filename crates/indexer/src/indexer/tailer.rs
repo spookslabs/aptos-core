@@ -15,8 +15,12 @@ use aptos_logger::{debug, info};
 use chrono::ParseError;
 use std::{fmt::Debug, sync::Arc};
 use tokio::{sync::Mutex, task::JoinHandle};
-use aptos_api_types::{Transaction, WriteSetChange};
 use crate::indexer::processing_result::{EndpointTableChange, EndpointTransaction, EndpointEvent, EndpointResourceChange};
+use aptos_protos::transaction::v1::{Transaction, WriteSetChange};
+use aptos_protos::transaction::v1::write_set_change::Change;
+use aptos_protos::transaction::v1::transaction::TransactionType::User;
+use aptos_protos::transaction::v1::transaction::TxnData;
+use std::ops::{Div, Mul, Add};
 
 #[derive(Clone)]
 pub struct Tailer {
@@ -53,71 +57,46 @@ impl Tailer {
         info!(version = version, "Will start fetching from version");
     }
 
-    pub async fn process_next_batch(
-        &self,
-    ) -> (
-        u64,
-        Option<ProcessingResult>,
-    ) {
-        let raw_transactions = self
-            .transaction_fetcher
-            .lock()
-            .await
-            .fetch_next_batch()
-            .await;
-
-        let num_txns = raw_transactions.len() as u64;
-        // When the batch is empty b/c we're caught up
-        if num_txns == 0 {
-            return (0, None);
-        }
-        let start_version = raw_transactions.first().unwrap().version();
-        let end_version = raw_transactions.last().unwrap().version();
-
-        debug!(
-            num_txns = num_txns,
-            start_version = start_version,
-            end_version = end_version,
-            "Starting processing of transaction batch"
-        );
-
-        let batch_start = chrono::Utc::now().naive_utc();
+    pub fn process(&self, raw_transactions: &Vec<Transaction>) -> Vec<EndpointTransaction> {
 
         let mut transactions = vec![];
 
-        for transaction in &raw_transactions {
-            if let Transaction::UserTransaction(transaction) = transaction {
-                if transaction.info.success {
+        for transaction in raw_transactions {
+            if let Some(TxnData::User(user_transaction)) = &transaction.txn_data {
+
+                let info = transaction.info.as_ref().unwrap();
+
+                if info.success {
 
                     let mut events = vec![];
                     let mut resources = vec![];
                     let mut changes = vec![];
 
-                    for event in &transaction.events {
-                        let typ = event.typ.to_string();
+                    for event in &user_transaction.events {
+                        let typ = event.type_str.to_string();
                         if self.events.contains(&typ) {
                             events.push(EndpointEvent {
-                                address: event.guid.account_address.to_string(),
+                                address: event.key.as_ref().unwrap().account_address.clone(),
                                 typ,
-                                data: event.data.clone()
+                                data: serde_json::from_str(event.data.as_ref()).unwrap()
                             });
                         }
                     }
 
-                    for write in &transaction.info.changes {
-                        match write {
-                            WriteSetChange::DeleteTableItem(item) => {
+                    for write in &info.changes {
+                        match write.change.as_ref().unwrap() {
+                            Change::DeleteTableItem(item) => {
                                 let handle = item.handle.to_string();
                                 if self.handles.contains(&handle) {
                                     changes.push(EndpointTableChange {
                                         handle,
-                                        key: item.data.as_ref().unwrap().key.clone(),
+                                        key: serde_json::from_str(item.key.as_ref()).unwrap(),
                                         value: None
                                     });
                                 }
                             }
-                            WriteSetChange::DeleteResource(resource) => {
-                                let typ = resource.resource.to_string();
+                            Change::DeleteResource(resource) => {
+                                let typ = resource.type_str.to_string();
                                 if self.resources.contains(&typ) {
                                     resources.push(EndpointResourceChange {
                                         address: resource.address.to_string(),
@@ -126,24 +105,24 @@ impl Tailer {
                                     });
                                 }
                             }
-                            WriteSetChange::WriteTableItem(item) => {
+                            Change::WriteTableItem(item) => {
                                 let handle = item.handle.to_string();
                                 if self.handles.contains(&handle) {
                                     let data = item.data.as_ref().unwrap();
                                     changes.push(EndpointTableChange {
                                         handle,
-                                        key: data.key.clone(),
-                                        value: Some(data.value.clone())
+                                        key: serde_json::from_str(data.key.as_ref()).unwrap(),
+                                        value: Some(serde_json::from_str(data.value.as_ref()).unwrap())
                                     });
                                 }
                             }
-                            WriteSetChange::WriteResource(resource) => {
-                                let typ = resource.data.typ.to_string();
+                            Change::WriteResource(resource) => {
+                                let typ = resource.type_str.to_string();
                                 if self.resources.contains(&typ) {
                                     resources.push(EndpointResourceChange {
                                         address: resource.address.to_string(),
                                         typ,
-                                        data: Some(resource.data.data.clone())
+                                        data: Some(serde_json::from_str(&resource.data).unwrap())
                                     });
                                 }
                             }
@@ -152,9 +131,12 @@ impl Tailer {
                     }
 
                     if !events.is_empty() || !resources.is_empty() || !changes.is_empty() {
+
+                        let timestamp = transaction.timestamp.clone().unwrap();
+
                         transactions.push(EndpointTransaction {
-                            version: transaction.info.version.0,
-                            timestamp: transaction.timestamp.0,
+                            version: transaction.version,
+                            timestamp: timestamp.seconds as u64 * 1000000 + timestamp.nanos as u64 / 1000,
                             events,
                             resources,
                             changes
@@ -164,21 +146,7 @@ impl Tailer {
             }
         }
 
-        let batch_millis = (chrono::Utc::now().naive_utc() - batch_start).num_milliseconds();
-
-        info!(
-            num_txns = num_txns,
-            time_millis = batch_millis,
-            start_version = start_version,
-            end_version = end_version,
-            "Finished processing of transaction batch"
-        );
-
-        (num_txns, Some(ProcessingResult {
-            transactions,
-            start_version: start_version.unwrap(),
-            end_version: end_version.unwrap()
-        }))
+        transactions
     }
 }
 

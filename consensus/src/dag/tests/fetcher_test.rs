@@ -3,7 +3,6 @@
 use super::dag_test::MockStorage;
 use crate::dag::{
     dag_fetcher::FetchRequestHandler,
-    dag_state_sync::DAG_WINDOW,
     dag_store::Dag,
     tests::helpers::new_certified_node,
     types::{DagSnapshotBitmask, FetchResponse, RemoteFetchRequest},
@@ -22,12 +21,7 @@ fn test_dag_fetcher_receiver() {
         verifier: validator_verifier,
     });
     let storage = Arc::new(MockStorage::new());
-    let dag = Arc::new(RwLock::new(Dag::new(
-        epoch_state.clone(),
-        storage,
-        0,
-        DAG_WINDOW,
-    )));
+    let dag = Arc::new(RwLock::new(Dag::new(epoch_state.clone(), storage, 1)));
 
     let mut fetcher = FetchRequestHandler::new(dag.clone(), epoch_state);
 

@@ -2779,7 +2779,7 @@ pub mod debug {
     }
 
     fn print_address<B: Write>(buf: &mut B, x: &AccountAddress) -> PartialVMResult<()> {
-        debug_write!(buf, "{}", x.to_hex())
+        debug_write!(buf, "{}", x)
     }
 
     fn print_value_impl<B: Write>(buf: &mut B, val: &ValueImpl) -> PartialVMResult<()> {

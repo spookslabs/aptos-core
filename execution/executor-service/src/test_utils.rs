@@ -1,12 +1,11 @@
 // Copyright © Aptos Foundation
 
-use aptos_block_partitioner::{v2::config::PartitionerV2Config, PartitionerConfig};
+use aptos_block_partitioner::sharded_block_partitioner::config::PartitionerV1Config;
 use aptos_language_e2e_tests::{
     account::AccountData, common_transactions::peer_to_peer_txn, data_store::FakeDataStore,
     executor::FakeExecutor,
 };
 use aptos_types::{
-    block_executor::partitioner::PartitionedTransactions,
     state_store::state_key::StateKeyInner,
     transaction::{analyzed_transaction::AnalyzedTransaction, Transaction, TransactionOutput},
 };
@@ -102,7 +101,8 @@ pub fn test_sharded_block_executor_no_conflict<E: ExecutorClient<FakeDataStore>>
     for _ in 0..num_txns {
         transactions.push(generate_non_conflicting_p2p(&mut executor).0)
     }
-    let partitioner = PartitionerV2Config::default()
+    let partitioner = PartitionerV1Config::default()
+        .num_shards(num_shards)
         .max_partitioning_rounds(2)
         .cross_shard_dep_avoid_threshold(0.9)
         .partition_last_round(true)
@@ -111,16 +111,13 @@ pub fn test_sharded_block_executor_no_conflict<E: ExecutorClient<FakeDataStore>>
     let sharded_txn_output = sharded_block_executor
         .execute_block(
             Arc::new(executor.data_store().clone()),
-            partitioned_txns.clone(),
+            partitioned_txns,
             2,
             None,
         )
         .unwrap();
     let unsharded_txn_output = AptosVM::execute_block(
-        PartitionedTransactions::flatten(partitioned_txns)
-            .into_iter()
-            .map(|t| t.into_txn())
-            .collect(),
+        transactions.into_iter().map(|t| t.into_txn()).collect(),
         executor.data_store(),
         None,
     )

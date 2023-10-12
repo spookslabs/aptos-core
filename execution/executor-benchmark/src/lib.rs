@@ -20,7 +20,6 @@ use crate::{
     transaction_executor::TransactionExecutor, transaction_generator::TransactionGenerator,
 };
 use aptos_block_executor::counters as block_executor_counters;
-use aptos_block_partitioner::v2::counters::BLOCK_PARTITIONING_SECONDS;
 use aptos_config::config::{NodeConfig, PrunerConfig};
 use aptos_db::AptosDB;
 use aptos_executor::{
@@ -166,14 +165,14 @@ pub fn run_benchmark<V>(
             db.clone(),
             // Initialization pipeline is temporary, so needs to be fully committed.
             // No discards/aborts allowed during initialization, even if they are allowed later.
-            &PipelineConfig::default(),
+            PipelineConfig::default(),
         )
     });
 
     let version = db.reader.get_latest_version().unwrap();
 
     let (pipeline, block_sender) =
-        Pipeline::new(executor, version, &pipeline_config, Some(num_blocks));
+        Pipeline::new(executor, version, pipeline_config, Some(num_blocks));
 
     let mut num_accounts_to_load = num_main_signer_accounts;
     if let Some(mix) = &transaction_mix {
@@ -204,7 +203,6 @@ pub fn run_benchmark<V>(
     let mut start_time = Instant::now();
     let start_gas_measurement = GasMesurement::start();
 
-    let start_partitioning_total = BLOCK_PARTITIONING_SECONDS.get_sample_sum();
     let start_execution_total = APTOS_EXECUTOR_EXECUTE_BLOCK_SECONDS.get_sample_sum();
     let start_vm_only = APTOS_EXECUTOR_VM_EXECUTE_BLOCK_SECONDS.get_sample_sum();
     let other_labels = vec![
@@ -281,15 +279,6 @@ pub fn run_benchmark<V>(
         delta_gas / (delta_gas_count as f64).max(1.0)
     );
 
-    let time_in_partitioning =
-        BLOCK_PARTITIONING_SECONDS.get_sample_sum() - start_partitioning_total;
-
-    info!(
-        "Overall fraction of total: {:.3} in partitioning (component TPS: {})",
-        time_in_partitioning / elapsed,
-        delta_v / time_in_partitioning
-    );
-
     let time_in_execution =
         APTOS_EXECUTOR_EXECUTE_BLOCK_SECONDS.get_sample_sum() - start_execution_total;
     info!(
@@ -345,7 +334,7 @@ fn init_workload<V>(
     mut main_signer_accounts: Vec<LocalAccount>,
     burner_accounts: Vec<LocalAccount>,
     db: DbReaderWriter,
-    pipeline_config: &PipelineConfig,
+    pipeline_config: PipelineConfig,
 ) -> Box<dyn TransactionGeneratorCreator>
 where
     V: TransactionBlockExecutor + 'static,
@@ -451,7 +440,7 @@ fn add_accounts_impl<V>(
     let (pipeline, block_sender) = Pipeline::new(
         executor,
         start_version,
-        &pipeline_config,
+        pipeline_config,
         Some(1 + num_new_accounts / block_size * 101 / 100),
     );
 

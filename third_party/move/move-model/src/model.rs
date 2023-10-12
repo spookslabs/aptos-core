@@ -18,7 +18,7 @@
 use crate::{
     ast::{
         Address, Attribute, ConditionKind, Exp, ExpData, GlobalInvariant, ModuleName, PropertyBag,
-        PropertyValue, Spec, SpecBlockInfo, SpecFunDecl, SpecVarDecl, UseDecl, Value,
+        PropertyValue, Spec, SpecBlockInfo, SpecFunDecl, SpecVarDecl, Value,
     },
     code_writer::CodeWriter,
     emit, emitln,
@@ -88,7 +88,7 @@ pub const GHOST_MEMORY_PREFIX: &str = "Ghost$";
 /// # Locations
 
 /// A location, consisting of a FileId and a span in this file.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct Loc {
     file_id: FileId,
     span: Span,
@@ -522,8 +522,6 @@ pub struct GlobalEnv {
     /// The address of the standard and extension libaries.
     pub(crate) stdlib_address: Option<Address>,
     pub(crate) extlib_address: Option<Address>,
-    /// Address alias map
-    pub(crate) address_alias_map: BTreeMap<Symbol, AccountAddress>,
 }
 
 /// A helper type for implementing fmt::Display depending on GlobalEnv
@@ -581,7 +579,6 @@ impl GlobalEnv {
             extensions: Default::default(),
             stdlib_address: None,
             extlib_address: None,
-            address_alias_map: Default::default(),
         }
     }
 
@@ -589,16 +586,6 @@ impl GlobalEnv {
     /// of fmt::Display for an instance to work in formatting.
     pub fn display<'a, T>(&'a self, val: &'a T) -> EnvDisplay<'a, T> {
         EnvDisplay { env: self, val }
-    }
-
-    /// Sets the global address alias map
-    pub fn set_address_alias_map(&mut self, map: BTreeMap<Symbol, AccountAddress>) {
-        self.address_alias_map = map
-    }
-
-    /// Attempts to resolve address alias.
-    pub fn resolve_address_alias(&self, alias: Symbol) -> Option<AccountAddress> {
-        self.address_alias_map.get(&alias).cloned()
     }
 
     /// Stores extension data in the environment. This can be arbitrary data which is
@@ -1170,7 +1157,6 @@ impl GlobalEnv {
         loc: Loc,
         name: ModuleName,
         attributes: Vec<Attribute>,
-        use_decls: Vec<UseDecl>,
         named_constants: BTreeMap<NamedConstantId, NamedConstantData>,
         mut struct_data: BTreeMap<StructId, StructData>,
         function_data: BTreeMap<FunId, FunctionData>,
@@ -1217,7 +1203,6 @@ impl GlobalEnv {
             module_spec,
             loc,
             attributes,
-            use_decls,
             spec_block_infos,
             used_modules: Default::default(),
             used_modules_including_specs: Default::default(),
@@ -1388,7 +1373,6 @@ impl GlobalEnv {
         let field_id = FieldId::new(field_name);
         field_data.insert(field_id, FieldData {
             name: field_name,
-            loc: loc.clone(),
             offset: 0,
             ty,
         });
@@ -1572,7 +1556,7 @@ impl GlobalEnv {
     /// Converts a storage module id into an AST module name.
     pub fn to_module_name(&self, storage_id: &language_storage::ModuleId) -> ModuleName {
         ModuleName::from_str(
-            &storage_id.address().to_hex(),
+            &storage_id.address().to_string(),
             self.symbol_pool.make(storage_id.name().as_str()),
         )
     }
@@ -1851,47 +1835,6 @@ impl GlobalEnv {
             }
             emitln!(writer, "module {} {{", module.get_full_name_str());
             writer.indent();
-            let add_alias = |s: String, a_opt: Option<Symbol>| {
-                format!(
-                    "{}{}",
-                    s,
-                    if let Some(a) = a_opt {
-                        format!(" as {}", a.display(spool))
-                    } else {
-                        "".to_owned()
-                    }
-                )
-            };
-            for use_decl in module.get_use_decls() {
-                emitln!(
-                    writer,
-                    "use {}{};{}",
-                    add_alias(
-                        use_decl.module_name.display_full(self).to_string(),
-                        use_decl.alias
-                    ),
-                    if !use_decl.members.is_empty() {
-                        format!(
-                            "::{{{}}}",
-                            use_decl
-                                .members
-                                .iter()
-                                .map(|(_, n, a)| add_alias(n.display(spool).to_string(), *a))
-                                .join(", ")
-                        )
-                    } else {
-                        "".to_owned()
-                    },
-                    if let Some(mid) = use_decl.module_id {
-                        format!(
-                            " // resolved as: {}",
-                            self.get_module(mid).get_full_name_str()
-                        )
-                    } else {
-                        "".to_owned()
-                    },
-                )
-            }
             for str in module.get_structs() {
                 emitln!(writer, "struct {} {{", str.get_name().display(spool));
                 writer.indent();
@@ -1905,38 +1848,13 @@ impl GlobalEnv {
                 }
                 writer.unindent();
                 emitln!(writer, "}");
-                let spec = str.get_spec();
-                if !spec.conditions.is_empty() {
-                    emitln!(writer, "{}", self.display(spec))
-                }
             }
             for fun in module.get_functions() {
-                emit!(writer, "{}", fun.get_header_string());
+                emit!(writer, "{}", fun.get_header());
                 if let Some(exp) = fun.get_def() {
                     emitln!(writer, " {");
                     writer.indent();
                     emitln!(writer, "{}", exp.display_for_fun(fun.clone()));
-                    writer.unindent();
-                    emitln!(writer, "}");
-                } else {
-                    emitln!(writer, ";");
-                }
-                let spec = fun.get_spec();
-                if !spec.conditions.is_empty() {
-                    emitln!(writer, "{}", self.display(&*spec))
-                }
-            }
-            for (_, fun) in module.get_spec_funs() {
-                emit!(
-                    writer,
-                    "spec fun {}{}",
-                    fun.name.display(spool),
-                    self.get_fun_signature_string(&fun.type_params, &fun.params, &fun.result_type)
-                );
-                if let Some(exp) = &fun.body {
-                    emitln!(writer, " {");
-                    writer.indent();
-                    emitln!(writer, "{}", exp.display(self));
                     writer.unindent();
                     emitln!(writer, "}");
                 } else {
@@ -1947,38 +1865,6 @@ impl GlobalEnv {
             emitln!(writer, "}} // end {}", module.get_full_name_str())
         }
         writer.extract_result()
-    }
-
-    /// Helper to create a string for a function signature.
-    fn get_fun_signature_string(
-        &self,
-        type_params: &[TypeParameter],
-        params: &[Parameter],
-        result_type: &Type,
-    ) -> String {
-        let spool = self.symbol_pool();
-        let tctx = &self.get_type_display_ctx();
-        let type_params_str = if !type_params.is_empty() {
-            format!(
-                "<{}>",
-                type_params
-                    .iter()
-                    .map(|p| p.0.display(spool).to_string())
-                    .join(",")
-            )
-        } else {
-            "".to_owned()
-        };
-        let params_str = params
-            .iter()
-            .map(|p| format!("{}: {}", p.0.display(spool), p.1.display(tctx)))
-            .join(",");
-        let result_str = if result_type.is_unit() {
-            "".to_owned()
-        } else {
-            format!(": {}", result_type.display(&self.get_type_display_ctx()))
-        };
-        format!("{}({}){}", type_params_str, params_str, result_str)
     }
 }
 
@@ -1996,9 +1882,6 @@ pub struct ModuleData {
 
     /// Attributes attached to this module.
     attributes: Vec<Attribute>,
-
-    /// Use declarations
-    use_decls: Vec<UseDecl>,
 
     /// Module byte code, if available.
     pub(crate) compiled_module: Option<CompiledModule>,
@@ -2082,11 +1965,6 @@ impl<'env> ModuleEnv<'env> {
     /// Returns the attributes of this module.
     pub fn get_attributes(&self) -> &[Attribute] {
         &self.data.attributes
-    }
-
-    /// Returns the use declarations of this module.
-    pub fn get_use_decls(&self) -> &[UseDecl] {
-        &self.data.use_decls
     }
 
     /// Returns full name as a string.
@@ -2907,9 +2785,6 @@ pub struct FieldData {
     /// The name of this field.
     pub name: Symbol,
 
-    /// The location of the field declaration.
-    pub loc: Loc,
-
     /// The offset of this field.
     pub offset: usize,
 
@@ -2935,11 +2810,6 @@ impl<'env> FieldEnv<'env> {
     /// Gets the id of this field.
     pub fn get_id(&self) -> FieldId {
         FieldId(self.data.name)
-    }
-
-    /// Gets the location of the field declaration.
-    pub fn get_loc(&self) -> &Loc {
-        &self.data.loc
     }
 
     /// Get documentation associated with this field.
@@ -3765,7 +3635,7 @@ impl<'env> FunctionEnv<'env> {
     }
 
     /// Returns a string representation of the functions 'header', as it is declared in Move.
-    pub fn get_header_string(&self) -> String {
+    pub fn get_header(&self) -> String {
         let mut s = String::new();
         s.push_str(match self.data.visibility {
             Visibility::Private => "private",
@@ -3780,15 +3650,32 @@ impl<'env> FunctionEnv<'env> {
         if self.is_native() {
             s.push_str(" native")
         }
+        let spool = self.symbol_pool();
+        let tctx = &self.get_type_display_ctx();
+        let generics = if !self.data.type_params.is_empty() {
+            format!(
+                "<{}>",
+                self.data
+                    .type_params
+                    .iter()
+                    .map(|p| p.0.display(spool).to_string())
+                    .join(",")
+            )
+        } else {
+            "".to_owned()
+        };
+        let args = self
+            .data
+            .params
+            .iter()
+            .map(|p| format!("{}: {}", p.0.display(spool), p.1.display(tctx)))
+            .join(",");
         write!(
             s,
-            " fun {}{}",
-            self.get_name().display(self.symbol_pool()),
-            self.module_env.env.get_fun_signature_string(
-                &self.data.type_params,
-                &self.data.params,
-                &self.data.result_type
-            )
+            " fun {}{}({})",
+            self.get_name().display(spool),
+            generics,
+            args
         )
         .unwrap();
         s

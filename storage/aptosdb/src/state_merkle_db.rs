@@ -16,7 +16,6 @@ use crate::{
 use anyhow::{ensure, Result};
 use aptos_config::config::{RocksdbConfig, RocksdbConfigs};
 use aptos_crypto::{hash::CryptoHash, HashValue};
-use aptos_experimental_runtimes::thread_manager::THREAD_MANAGER;
 use aptos_jellyfish_merkle::{
     node_type::{NodeKey, NodeType},
     JellyfishMerkleTree, TreeReader, TreeUpdateBatch, TreeWriter,
@@ -33,6 +32,7 @@ use aptos_types::{
     transaction::Version,
 };
 use arr_macro::arr;
+use once_cell::sync::Lazy;
 use rayon::prelude::*;
 use std::{
     collections::HashMap,
@@ -44,6 +44,14 @@ use std::{
 pub const STATE_MERKLE_DB_FOLDER_NAME: &str = "state_merkle_db";
 pub const STATE_MERKLE_DB_NAME: &str = "state_merkle_db";
 pub const STATE_MERKLE_METADATA_DB_NAME: &str = "state_merkle_metadata_db";
+
+static TREE_COMMIT_POOL: Lazy<rayon::ThreadPool> = Lazy::new(|| {
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(32)
+        .thread_name(|index| format!("tree_commit-{}", index))
+        .build()
+        .unwrap()
+});
 
 pub(crate) type LeafNode = aptos_jellyfish_merkle::node_type::LeafNode<StateKey>;
 pub(crate) type Node = aptos_jellyfish_merkle::node_type::Node<StateKey>;
@@ -115,7 +123,7 @@ impl StateMerkleDb {
         batches_for_shards: Vec<SchemaBatch>,
     ) -> Result<()> {
         ensure!(batches_for_shards.len() == NUM_STATE_SHARDS);
-        THREAD_MANAGER.get_io_pool().scope(|s| {
+        TREE_COMMIT_POOL.scope(|s| {
             let mut batches = batches_for_shards.into_iter();
             for shard_id in 0..NUM_STATE_SHARDS {
                 let state_merkle_batch = batches.next().unwrap();
@@ -137,7 +145,7 @@ impl StateMerkleDb {
         batches_for_shards: Vec<SchemaBatch>,
     ) -> Result<()> {
         ensure!(batches_for_shards.len() == NUM_STATE_SHARDS);
-        THREAD_MANAGER.get_io_pool().scope(|s| {
+        TREE_COMMIT_POOL.scope(|s| {
             let mut state_merkle_batch = batches_for_shards.into_iter();
             for shard_id in 0..NUM_STATE_SHARDS {
                 let batch = state_merkle_batch.next().unwrap();

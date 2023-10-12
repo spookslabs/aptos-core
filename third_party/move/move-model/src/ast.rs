@@ -76,7 +76,7 @@ pub enum Attribute {
 // =================================================================================================
 /// # Conditions
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ConditionKind {
     LetPost(Symbol),
     LetPre(Symbol),
@@ -238,7 +238,7 @@ impl std::fmt::Display for QuantKind {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct Condition {
     pub loc: Loc,
     pub kind: ConditionKind,
@@ -261,7 +261,7 @@ impl Condition {
 pub type PropertyBag = BTreeMap<Symbol, PropertyValue>;
 
 /// The value of a property.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub enum PropertyValue {
     Value(Value),
     Symbol(Symbol),
@@ -269,22 +269,19 @@ pub enum PropertyValue {
 }
 
 /// Specification and properties associated with a language item.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Default)]
 pub struct Spec {
-    /// The location of this specification, if available.
+    // The location of this specification, if available.
     pub loc: Option<Loc>,
-    /// The set of conditions associated with this item.
+    // The set of conditions associated with this item.
     pub conditions: Vec<Condition>,
-    /// Any pragma properties associated with this item.
+    // Any pragma properties associated with this item.
     pub properties: PropertyBag,
-    /// If this is a function, specs associated with individual code points. Note: only used
-    /// with v1 compile chain.
+    // If this is a function, specs associated with individual code points.
     pub on_impl: BTreeMap<CodeOffset, Spec>,
-    /// The map to store ghost variable update statements inlined in the function body.
+    // The map to store ghost variable update statements inlined in the function body
     pub update_map: BTreeMap<NodeId, Condition>,
 }
-
-pub enum ImplSpecId {}
 
 impl Spec {
     pub fn has_conditions(&self) -> bool {
@@ -352,24 +349,6 @@ pub struct GlobalInvariant {
     pub declaring_module: ModuleId,
     pub properties: PropertyBag,
     pub cond: Exp,
-}
-
-// =================================================================================================
-/// # Use Declarations
-
-/// Represents a `use` declaration in the source.
-#[derive(Debug, Clone)]
-pub struct UseDecl {
-    /// Location covered by this declaration.
-    pub loc: Loc,
-    /// The name of the module.
-    pub module_name: ModuleName,
-    /// The resolved module id, if it is known.
-    pub module_id: Option<ModuleId>,
-    /// An optional alias assigned to the module.
-    pub alias: Option<Symbol>,
-    /// A list of member uses, with optional aliasing.
-    pub members: Vec<(Loc, Symbol, Option<Symbol>)>,
 }
 
 // =================================================================================================
@@ -443,8 +422,6 @@ pub enum ExpData {
     Assign(NodeId, Pattern, Exp),
     /// Mutation of a lhs reference, as in `*lhs = rhs`.
     Mutate(NodeId, Exp, Exp),
-    /// Represents a specification block, type is ().
-    SpecBlock(NodeId, Spec),
 }
 
 /// An internalized expression. We do use a wrapper around the underlying internement implementation
@@ -537,8 +514,7 @@ impl ExpData {
             | LoopCont(node_id, ..)
             | Return(node_id, ..)
             | Mutate(node_id, ..)
-            | Assign(node_id, ..)
-            | SpecBlock(node_id, ..) => *node_id,
+            | Assign(node_id, ..) => *node_id,
         }
     }
 
@@ -795,36 +771,10 @@ impl ExpData {
                 lhs.visit_pre_post(visitor);
                 rhs.visit_pre_post(visitor);
             },
-            SpecBlock(_, spec) => Self::visit_pre_post_spec(spec, visitor),
             // Explicitly list all enum variants
             LoopCont(..) | Value(..) | LocalVar(..) | Temporary(..) | Invalid(..) => {},
         }
         visitor(true, self);
-    }
-
-    fn visit_pre_post_spec<F>(spec: &Spec, visitor: &mut F)
-    where
-        F: FnMut(bool, &ExpData),
-    {
-        for cond in &spec.conditions {
-            Self::visit_pre_post_cond(cond, visitor)
-        }
-        for impl_spec in spec.on_impl.values() {
-            Self::visit_pre_post_spec(impl_spec, visitor)
-        }
-        for cond in spec.update_map.values() {
-            Self::visit_pre_post_cond(cond, visitor)
-        }
-    }
-
-    fn visit_pre_post_cond<F>(cond: &Condition, visitor: &mut F)
-    where
-        F: FnMut(bool, &ExpData),
-    {
-        cond.exp.visit_pre_post(visitor);
-        for exp in &cond.additional_exps {
-            exp.visit_pre_post(visitor);
-        }
     }
 
     /// Rewrites this expression and sub-expression based on the rewriter function. The
@@ -1259,7 +1209,7 @@ impl Operation {
         )
     }
 
-    /// Whether the operation allows to take reference parameters instead of values. This applies
+    /// Whether the operation alllows to take reference parameters instead of values. This applies
     /// currently to equality which can be used on `(T, T)`, `(T, &T)`, etc.
     pub fn allows_ref_param_for_value(&self) -> bool {
         matches!(self, Operation::Eq | Operation::Neq)
@@ -1642,9 +1592,6 @@ impl<'a> fmt::Display for ExpDisplay<'a> {
             Mutate(_, lhs, rhs) => {
                 write!(f, "{} = {}", lhs.display_cont(self), rhs.display_cont(self))
             },
-            SpecBlock(_, spec) => {
-                write!(f, "{}", self.env.display(spec))
-            },
         }
     }
 }
@@ -1894,7 +1841,7 @@ impl<'a> fmt::Display for EnvDisplay<'a, Condition> {
                     exps[1].display(self.env)
                 )?;
                 if exps.len() > 2 {
-                    write!(f, " if {}", exps[2].display(self.env))?;
+                    write!(f, "if {}", exps[2].display(self.env))?;
                 }
                 write!(f, ";")?
             },

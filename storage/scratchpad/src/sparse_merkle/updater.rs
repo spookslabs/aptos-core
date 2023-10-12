@@ -14,7 +14,6 @@ use aptos_crypto::{
     hash::{CryptoHash, SPARSE_MERKLE_PLACEHOLDER_HASH},
     HashValue,
 };
-use aptos_experimental_runtimes::thread_manager::THREAD_MANAGER;
 use aptos_types::proof::{definition::NodeInProof, SparseMerkleLeafNode, SparseMerkleProofExt};
 use std::cmp::Ordering;
 
@@ -313,9 +312,7 @@ impl<'a, V: Send + Sync + Clone + CryptoHash> SubTreeUpdater<'a, V> {
                     && left.updates.len() >= MIN_PARALLELIZABLE_SIZE
                     && right.updates.len() >= MIN_PARALLELIZABLE_SIZE
                 {
-                    THREAD_MANAGER
-                        .get_exe_cpu_pool()
-                        .join(|| left.run(proof_reader), || right.run(proof_reader))
+                    rayon::join(|| left.run(proof_reader), || right.run(proof_reader))
                 } else {
                     (left.run(proof_reader), right.run(proof_reader))
                 };

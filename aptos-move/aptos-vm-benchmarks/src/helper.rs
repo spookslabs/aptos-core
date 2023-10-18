@@ -116,9 +116,7 @@ pub fn get_module_name(
         member_id: _function_id,
     } = str::parse(&format!(
         "0x{}::{}::{}",
-        address.to_hex(),
-        identifier,
-        func_identifier,
+        address, identifier, func_identifier,
     ))
     .unwrap();
 

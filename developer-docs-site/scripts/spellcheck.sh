@@ -7,11 +7,9 @@ cd ..
 build_dict_path="/tmp/additional_dict.rws"
 rewritten_file_path="/tmp/rewritten_file.md"
 
-which aspell || { echo "ERROR: Please install 'aspell'"; exit 1; }
-
 # Build additional word dictionary.
 echo "Building additional word dictionary..."
-aspell --encoding=utf-8 --lang=en create master $build_dict_path < scripts/additional_dict.txt
+aspell --lang=en create master $build_dict_path < scripts/additional_dict.txt
 echo "Built additional word dictionary"
 echo
 

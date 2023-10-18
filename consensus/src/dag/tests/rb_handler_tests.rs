@@ -3,7 +3,6 @@
 
 use crate::dag::{
     dag_fetcher::TFetchRequester,
-    dag_state_sync::DAG_WINDOW,
     dag_store::Dag,
     rb_handler::{NodeBroadcastHandleError, NodeBroadcastHandler},
     storage::DAGStorage,
@@ -44,8 +43,7 @@ async fn test_node_broadcast_receiver_succeed() {
     let dag = Arc::new(RwLock::new(Dag::new(
         epoch_state.clone(),
         storage.clone(),
-        0,
-        DAG_WINDOW,
+        1,
     )));
 
     let wellformed_node = new_node(1, 10, signers[0].author(), vec![]);
@@ -88,8 +86,7 @@ async fn test_node_broadcast_receiver_failure() {
             let dag = Arc::new(RwLock::new(Dag::new(
                 epoch_state.clone(),
                 storage.clone(),
-                0,
-                DAG_WINDOW,
+                1,
             )));
 
             NodeBroadcastHandler::new(
@@ -164,8 +161,7 @@ fn test_node_broadcast_receiver_storage() {
     let dag = Arc::new(RwLock::new(Dag::new(
         epoch_state.clone(),
         storage.clone(),
-        0,
-        DAG_WINDOW,
+        1,
     )));
 
     let node = new_node(1, 10, signers[0].author(), vec![]);

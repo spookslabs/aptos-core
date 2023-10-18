@@ -55,8 +55,6 @@ impl StatelessPipeline for ExecutionPhase {
     type Request = ExecutionRequest;
     type Response = ExecutionResponse;
 
-    const NAME: &'static str = "execution";
-
     async fn process(&self, req: ExecutionRequest) -> ExecutionResponse {
         let ExecutionRequest { ordered_blocks } = req;
 

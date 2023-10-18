@@ -1178,7 +1178,11 @@ impl FromStr for AccountAddressWrapper {
 
 /// Loads an account arg and allows for naming based on profiles
 pub fn load_account_arg(str: &str) -> Result<AccountAddress, CliError> {
-    if let Ok(account_address) = AccountAddress::from_str(str) {
+    if str.starts_with("0x") {
+        AccountAddress::from_hex_literal(str).map_err(|err| {
+            CliError::CommandArgumentError(format!("Failed to parse AccountAddress {}", err))
+        })
+    } else if let Ok(account_address) = AccountAddress::from_str(str) {
         Ok(account_address)
     } else if let Some(Some(account_address)) =
         CliConfig::load_profile(Some(str), ConfigSearchMode::CurrentDirAndParents)?
@@ -1218,6 +1222,12 @@ impl FromStr for MoveManifestAccountWrapper {
 pub fn load_manifest_account_arg(str: &str) -> Result<Option<AccountAddress>, CliError> {
     if str == "_" {
         Ok(None)
+    } else if str.starts_with("0x") {
+        AccountAddress::from_hex_literal(str)
+            .map(Some)
+            .map_err(|err| {
+                CliError::CommandArgumentError(format!("Failed to parse AccountAddress {}", err))
+            })
     } else if let Ok(account_address) = AccountAddress::from_str(str) {
         Ok(Some(account_address))
     } else if let Some(Some(private_key)) =

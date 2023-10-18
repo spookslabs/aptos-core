@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::dag::{
-    dag_state_sync::DAG_WINDOW,
     dag_store::Dag,
-    storage::{CommitEvent, DAGStorage},
+    storage::DAGStorage,
     tests::helpers::new_certified_node,
     types::{CertifiedNode, DagSnapshotBitmask, Node},
     NodeId, Vote,
@@ -98,10 +97,6 @@ impl DAGStorage for MockStorage {
     fn delete_ordered_anchor_ids(&self, _node_ids: Vec<NodeId>) -> anyhow::Result<()> {
         Ok(())
     }
-
-    fn get_latest_k_committed_events(&self, _k: u64) -> anyhow::Result<Vec<CommitEvent>> {
-        Ok(vec![])
-    }
 }
 
 fn setup() -> (Vec<ValidatorSigner>, Arc<EpochState>, Dag, Arc<MockStorage>) {
@@ -111,7 +106,7 @@ fn setup() -> (Vec<ValidatorSigner>, Arc<EpochState>, Dag, Arc<MockStorage>) {
         verifier: validator_verifier,
     });
     let storage = Arc::new(MockStorage::new());
-    let dag = Dag::new(epoch_state.clone(), storage.clone(), 0, DAG_WINDOW);
+    let dag = Dag::new(epoch_state.clone(), storage.clone(), 1);
     (signers, epoch_state, dag, storage)
 }
 
@@ -199,7 +194,7 @@ fn test_dag_recover_from_storage() {
             assert!(dag.add_node(node).is_ok());
         }
     }
-    let new_dag = Dag::new(epoch_state.clone(), storage.clone(), 0, DAG_WINDOW);
+    let new_dag = Dag::new(epoch_state.clone(), storage.clone(), 1);
 
     for metadata in &metadatas {
         assert!(new_dag.exists(metadata));
@@ -210,7 +205,7 @@ fn test_dag_recover_from_storage() {
         verifier: epoch_state.verifier.clone(),
     });
 
-    let _new_epoch_dag = Dag::new(new_epoch_state, storage.clone(), 0, DAG_WINDOW);
+    let _new_epoch_dag = Dag::new(new_epoch_state, storage.clone(), 1);
     assert!(storage.certified_node_data.lock().is_empty());
 }
 

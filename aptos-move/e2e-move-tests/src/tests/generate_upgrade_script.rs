@@ -24,7 +24,7 @@ module 0x{}::test {{
     public entry fun hi(_s: &signer){{
     }}
 }}",
-            acc.address().to_hex()
+            acc.address()
         ),
     );
     let upgrade_dir = upgrade.write_to_temp().unwrap();

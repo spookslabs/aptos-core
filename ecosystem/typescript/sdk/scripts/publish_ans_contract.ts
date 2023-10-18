@@ -55,18 +55,6 @@ try {
     repoDir = tempDir;
   }
 
-  // Derive the router signer address.
-  const ROUTER_SIGNER = `0x${
-    JSON.parse(
-      execSync(
-        `${cliInvocation} account derive-resource-account-address --address ${ANS_TEST_ACCOUNT_ADDRESS} --seed "ANS ROUTER" --seed-encoding utf8`,
-        {
-          encoding: "utf8",
-        },
-      ),
-    ).Result
-  }`;
-
   // 2. Fund ANS account.
   console.log("---funding account---");
   execSync(
@@ -77,7 +65,7 @@ try {
   // 3. Publish the ANS modules under the ANS account.
   console.log("---publishing ans modules---");
   execSync(
-    `${cliInvocation} move publish --package-dir ${repoDir}/core --assume-yes --private-key=${ANS_TEST_ACCOUNT_PRIVATE_KEY} --named-addresses aptos_names=${ANS_TEST_ACCOUNT_ADDRESS},aptos_names_admin=${ANS_TEST_ACCOUNT_ADDRESS},aptos_names_funds=${ANS_TEST_ACCOUNT_ADDRESS},router_signer=${ROUTER_SIGNER} --url=${APTOS_NODE_URL}`,
+    `${cliInvocation} move publish --package-dir ${repoDir}/core --assume-yes --private-key=${ANS_TEST_ACCOUNT_PRIVATE_KEY} --named-addresses aptos_names=${ANS_TEST_ACCOUNT_ADDRESS},aptos_names_admin=${ANS_TEST_ACCOUNT_ADDRESS},aptos_names_funds=${ANS_TEST_ACCOUNT_ADDRESS} --url=${APTOS_NODE_URL}`,
     { stdio: "inherit" },
   );
   console.log("---module published---");

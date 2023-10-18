@@ -184,7 +184,6 @@ fn test_executor_status_consensus_only() {
         .execute_block(
             (block_id, block(vec![txn0, txn1, txn2], BLOCK_GAS_LIMIT)).into(),
             parent_block_id,
-            BLOCK_GAS_LIMIT,
         )
         .unwrap();
 

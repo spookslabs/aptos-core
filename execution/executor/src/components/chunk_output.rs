@@ -225,7 +225,7 @@ impl ChunkOutput {
                     TransactionOutput::new(
                         WriteSet::default(),
                         Vec::new(),
-                        0, // Keep gas zero to match with StateCheckpoint txn output
+                        100,
                         TransactionStatus::Keep(ExecutionStatus::Success),
                     )
                 })

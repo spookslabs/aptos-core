@@ -704,7 +704,6 @@ impl<'env> SpecTranslator<'env> {
             | ExpData::Loop(..)
             | ExpData::Assign(..)
             | ExpData::Mutate(..)
-            | ExpData::SpecBlock(..)
             | ExpData::LoopCont(..) => panic!("imperative expressions not supported"),
         }
     }

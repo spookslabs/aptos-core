@@ -81,7 +81,7 @@ fn test_resource_groups() {
     // Initialize secondary and verify it exists and nothing else does
     let result = h.run_entry_function(
         &user_account,
-        str::parse(&format!("0x{}::secondary::init", secondary_addr.to_hex())).unwrap(),
+        str::parse(&format!("0x{}::secondary::init", secondary_addr)).unwrap(),
         vec![],
         vec![bcs::to_bytes::<u32>(&22).unwrap()],
     );
@@ -112,7 +112,7 @@ fn test_resource_groups() {
     // Initialize primary and verify it exists with secondary
     let result = h.run_entry_function(
         &user_account,
-        str::parse(&format!("0x{}::primary::init", primary_addr.to_hex())).unwrap(),
+        str::parse(&format!("0x{}::primary::init", primary_addr)).unwrap(),
         vec![],
         vec![bcs::to_bytes::<u64>(&11122).unwrap()],
     );
@@ -145,11 +145,7 @@ fn test_resource_groups() {
     // Modify secondary and verify primary stays consistent
     let result = h.run_entry_function(
         &user_account,
-        str::parse(&format!(
-            "0x{}::secondary::set_value",
-            secondary_addr.to_hex()
-        ))
-        .unwrap(),
+        str::parse(&format!("0x{}::secondary::set_value", secondary_addr)).unwrap(),
         vec![],
         vec![bcs::to_bytes::<u32>(&5).unwrap()],
     );
@@ -182,7 +178,7 @@ fn test_resource_groups() {
     // Delete the first and verify the second remains
     let result = h.run_entry_function(
         &user_account,
-        str::parse(&format!("0x{}::primary::remove", primary_addr.to_hex())).unwrap(),
+        str::parse(&format!("0x{}::primary::remove", primary_addr)).unwrap(),
         vec![],
         vec![],
     );
@@ -213,7 +209,7 @@ fn test_resource_groups() {
     // Delete the second and verify nothing remains
     let result = h.run_entry_function(
         &user_account,
-        str::parse(&format!("0x{}::secondary::remove", secondary_addr.to_hex())).unwrap(),
+        str::parse(&format!("0x{}::secondary::remove", secondary_addr)).unwrap(),
         vec![],
         vec![],
     );

@@ -2,10 +2,7 @@
 // Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    counters::BUFFER_MANAGER_PHASE_PROCESS_SECONDS,
-    experimental::buffer_manager::{Receiver, Sender},
-};
+use crate::experimental::buffer_manager::{Receiver, Sender};
 use aptos_logger::debug;
 use async_trait::async_trait;
 use futures::{SinkExt, StreamExt};
@@ -18,9 +15,6 @@ use std::sync::{
 pub trait StatelessPipeline: Send + Sync {
     type Request;
     type Response;
-
-    const NAME: &'static str;
-
     async fn process(&self, req: Self::Request) -> Self::Response;
 }
 
@@ -76,12 +70,7 @@ impl<T: StatelessPipeline> PipelinePhase<T> {
         // main loop
         while let Some(counted_req) = self.rx.next().await {
             let CountedRequest { req, guard: _guard } = counted_req;
-            let response = {
-                let _timer = BUFFER_MANAGER_PHASE_PROCESS_SECONDS
-                    .with_label_values(&[T::NAME])
-                    .start_timer();
-                self.processor.process(req).await
-            };
+            let response = self.processor.process(req).await;
             if let Some(tx) = &mut self.maybe_tx {
                 if tx.send(response).await.is_err() {
                     debug!("Failed to send response, buffer manager probably dropped");

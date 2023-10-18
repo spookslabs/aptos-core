@@ -4,9 +4,8 @@ use crate::{
     dag::{
         anchor_election::RoundRobinAnchorElection,
         dag_driver::{DagDriver, DagDriverError},
-        dag_fetcher::DagFetcherService,
+        dag_fetcher::DagFetcher,
         dag_network::{RpcWithFallback, TDAGNetworkSender},
-        dag_state_sync::DAG_WINDOW,
         dag_store::Dag,
         order_rule::OrderRule,
         tests::{
@@ -79,8 +78,7 @@ async fn test_certified_node_handler() {
     let dag = Arc::new(RwLock::new(Dag::new(
         epoch_state.clone(),
         storage.clone(),
-        0,
-        DAG_WINDOW,
+        1,
     )));
 
     let network_sender = Arc::new(MockNetworkSender {});
@@ -103,7 +101,7 @@ async fn test_certified_node_handler() {
         storage.clone(),
     );
 
-    let (_, fetch_requester, _, _) = DagFetcherService::new(
+    let (_, fetch_requester, _, _) = DagFetcher::new(
         epoch_state.clone(),
         network_sender,
         dag.clone(),

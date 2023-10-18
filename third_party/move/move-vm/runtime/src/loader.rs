@@ -2614,7 +2614,7 @@ impl Function {
             Scope::Script(_) => "Script::main".into(),
             Scope::Module(id) => format!(
                 "0x{}::{}::{}",
-                id.address().to_hex(),
+                id.address(),
                 id.name().as_str(),
                 self.name.as_str()
             ),

@@ -1,5 +1,5 @@
 
-<a name="0x1_aptos_hash"></a>
+<a id="0x1_aptos_hash"></a>
 
 # Module `0x1::aptos_hash`
 
@@ -26,6 +26,7 @@ Non-cryptograhic hashes:
 -  [Function `ripemd160_internal`](#0x1_aptos_hash_ripemd160_internal)
 -  [Function `blake2b_256_internal`](#0x1_aptos_hash_blake2b_256_internal)
 -  [Specification](#@Specification_1)
+    -  [Module-level Specification](#@Module-level_Specification_2)
     -  [Function `sip_hash`](#@Specification_1_sip_hash)
     -  [Function `sip_hash_from_value`](#@Specification_1_sip_hash_from_value)
     -  [Function `keccak256`](#@Specification_1_keccak256)
@@ -46,12 +47,12 @@ Non-cryptograhic hashes:
 
 
 
-<a name="@Constants_0"></a>
+<a id="@Constants_0"></a>
 
 ## Constants
 
 
-<a name="0x1_aptos_hash_E_NATIVE_FUN_NOT_AVAILABLE"></a>
+<a id="0x1_aptos_hash_E_NATIVE_FUN_NOT_AVAILABLE"></a>
 
 A newly-added native function is not yet enabled.
 
@@ -61,7 +62,7 @@ A newly-added native function is not yet enabled.
 
 
 
-<a name="0x1_aptos_hash_sip_hash"></a>
+<a id="0x1_aptos_hash_sip_hash"></a>
 
 ## Function `sip_hash`
 
@@ -84,7 +85,7 @@ Returns the (non-cryptographic) SipHash of <code>bytes</code>. See https://en.wi
 
 </details>
 
-<a name="0x1_aptos_hash_sip_hash_from_value"></a>
+<a id="0x1_aptos_hash_sip_hash_from_value"></a>
 
 ## Function `sip_hash_from_value`
 
@@ -111,7 +112,7 @@ Returns the (non-cryptographic) SipHash of the BCS serialization of <code>v</cod
 
 </details>
 
-<a name="0x1_aptos_hash_keccak256"></a>
+<a id="0x1_aptos_hash_keccak256"></a>
 
 ## Function `keccak256`
 
@@ -134,7 +135,7 @@ Returns the Keccak-256 hash of <code>bytes</code>.
 
 </details>
 
-<a name="0x1_aptos_hash_sha2_512"></a>
+<a id="0x1_aptos_hash_sha2_512"></a>
 
 ## Function `sha2_512`
 
@@ -163,7 +164,7 @@ Returns the SHA2-512 hash of <code>bytes</code>.
 
 </details>
 
-<a name="0x1_aptos_hash_sha3_512"></a>
+<a id="0x1_aptos_hash_sha3_512"></a>
 
 ## Function `sha3_512`
 
@@ -192,7 +193,7 @@ Returns the SHA3-512 hash of <code>bytes</code>.
 
 </details>
 
-<a name="0x1_aptos_hash_ripemd160"></a>
+<a id="0x1_aptos_hash_ripemd160"></a>
 
 ## Function `ripemd160`
 
@@ -224,7 +225,7 @@ hashes will, with high probability, find a collision x_1 != x_2 such that RIPEMD
 
 </details>
 
-<a name="0x1_aptos_hash_blake2b_256"></a>
+<a id="0x1_aptos_hash_blake2b_256"></a>
 
 ## Function `blake2b_256`
 
@@ -253,7 +254,7 @@ Returns the BLAKE2B-256 hash of <code>bytes</code>.
 
 </details>
 
-<a name="0x1_aptos_hash_sha2_512_internal"></a>
+<a id="0x1_aptos_hash_sha2_512_internal"></a>
 
 ## Function `sha2_512_internal`
 
@@ -276,7 +277,7 @@ Returns the SHA2-512 hash of <code>bytes</code>.
 
 </details>
 
-<a name="0x1_aptos_hash_sha3_512_internal"></a>
+<a id="0x1_aptos_hash_sha3_512_internal"></a>
 
 ## Function `sha3_512_internal`
 
@@ -299,7 +300,7 @@ Returns the SHA3-512 hash of <code>bytes</code>.
 
 </details>
 
-<a name="0x1_aptos_hash_ripemd160_internal"></a>
+<a id="0x1_aptos_hash_ripemd160_internal"></a>
 
 ## Function `ripemd160_internal`
 
@@ -325,7 +326,7 @@ hashes will, with high probability, find a collision x_1 != x_2 such that RIPEMD
 
 </details>
 
-<a name="0x1_aptos_hash_blake2b_256_internal"></a>
+<a id="0x1_aptos_hash_blake2b_256_internal"></a>
 
 ## Function `blake2b_256_internal`
 
@@ -348,15 +349,20 @@ Returns the BLAKE2B-256 hash of <code>bytes</code>.
 
 </details>
 
-<a name="@Specification_1"></a>
+<a id="@Specification_1"></a>
 
 ## Specification
+
+
+<a id="@Module-level_Specification_2"></a>
+
+### Module-level Specification
 
 
 <code>spec_sip_hash</code> is not assumed to be injective.
 
 
-<a name="0x1_aptos_hash_spec_sip_hash"></a>
+<a id="0x1_aptos_hash_spec_sip_hash"></a>
 
 
 <pre><code><b>fun</b> <a href="hash.md#0x1_aptos_hash_spec_sip_hash">spec_sip_hash</a>(bytes: <a href="../../move-stdlib/doc/vector.md#0x1_vector">vector</a>&lt;u8&gt;): u64;
@@ -366,7 +372,7 @@ Returns the BLAKE2B-256 hash of <code>bytes</code>.
 <code>spec_keccak256</code> is an injective function.
 
 
-<a name="0x1_aptos_hash_spec_keccak256"></a>
+<a id="0x1_aptos_hash_spec_keccak256"></a>
 
 
 <pre><code><b>fun</b> <a href="hash.md#0x1_aptos_hash_spec_keccak256">spec_keccak256</a>(bytes: <a href="../../move-stdlib/doc/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../../move-stdlib/doc/vector.md#0x1_vector">vector</a>&lt;u8&gt;;
@@ -378,7 +384,7 @@ Returns the BLAKE2B-256 hash of <code>bytes</code>.
 <code>spec_sha2_512_internal</code> is an injective function.
 
 
-<a name="0x1_aptos_hash_spec_sha2_512_internal"></a>
+<a id="0x1_aptos_hash_spec_sha2_512_internal"></a>
 
 
 <pre><code><b>fun</b> <a href="hash.md#0x1_aptos_hash_spec_sha2_512_internal">spec_sha2_512_internal</a>(bytes: <a href="../../move-stdlib/doc/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../../move-stdlib/doc/vector.md#0x1_vector">vector</a>&lt;u8&gt;;
@@ -390,7 +396,7 @@ Returns the BLAKE2B-256 hash of <code>bytes</code>.
 <code>spec_sha3_512_internal</code> is an injective function.
 
 
-<a name="0x1_aptos_hash_spec_sha3_512_internal"></a>
+<a id="0x1_aptos_hash_spec_sha3_512_internal"></a>
 
 
 <pre><code><b>fun</b> <a href="hash.md#0x1_aptos_hash_spec_sha3_512_internal">spec_sha3_512_internal</a>(bytes: <a href="../../move-stdlib/doc/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../../move-stdlib/doc/vector.md#0x1_vector">vector</a>&lt;u8&gt;;
@@ -402,7 +408,7 @@ Returns the BLAKE2B-256 hash of <code>bytes</code>.
 <code>spec_ripemd160_internal</code> is an injective function.
 
 
-<a name="0x1_aptos_hash_spec_ripemd160_internal"></a>
+<a id="0x1_aptos_hash_spec_ripemd160_internal"></a>
 
 
 <pre><code><b>fun</b> <a href="hash.md#0x1_aptos_hash_spec_ripemd160_internal">spec_ripemd160_internal</a>(bytes: <a href="../../move-stdlib/doc/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../../move-stdlib/doc/vector.md#0x1_vector">vector</a>&lt;u8&gt;;
@@ -414,7 +420,7 @@ Returns the BLAKE2B-256 hash of <code>bytes</code>.
 <code>spec_blake2b_256_internal</code> is an injective function.
 
 
-<a name="0x1_aptos_hash_spec_blake2b_256_internal"></a>
+<a id="0x1_aptos_hash_spec_blake2b_256_internal"></a>
 
 
 <pre><code><b>fun</b> <a href="hash.md#0x1_aptos_hash_spec_blake2b_256_internal">spec_blake2b_256_internal</a>(bytes: <a href="../../move-stdlib/doc/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../../move-stdlib/doc/vector.md#0x1_vector">vector</a>&lt;u8&gt;;
@@ -424,7 +430,7 @@ Returns the BLAKE2B-256 hash of <code>bytes</code>.
 
 
 
-<a name="@Specification_1_sip_hash"></a>
+<a id="@Specification_1_sip_hash"></a>
 
 ### Function `sip_hash`
 
@@ -442,7 +448,7 @@ Returns the BLAKE2B-256 hash of <code>bytes</code>.
 
 
 
-<a name="@Specification_1_sip_hash_from_value"></a>
+<a id="@Specification_1_sip_hash_from_value"></a>
 
 ### Function `sip_hash_from_value`
 
@@ -459,7 +465,7 @@ Returns the BLAKE2B-256 hash of <code>bytes</code>.
 
 
 
-<a name="@Specification_1_keccak256"></a>
+<a id="@Specification_1_keccak256"></a>
 
 ### Function `keccak256`
 
@@ -477,7 +483,7 @@ Returns the BLAKE2B-256 hash of <code>bytes</code>.
 
 
 
-<a name="@Specification_1_sha2_512"></a>
+<a id="@Specification_1_sha2_512"></a>
 
 ### Function `sha2_512`
 
@@ -495,7 +501,7 @@ Returns the BLAKE2B-256 hash of <code>bytes</code>.
 
 
 
-<a name="@Specification_1_sha3_512"></a>
+<a id="@Specification_1_sha3_512"></a>
 
 ### Function `sha3_512`
 
@@ -513,7 +519,7 @@ Returns the BLAKE2B-256 hash of <code>bytes</code>.
 
 
 
-<a name="@Specification_1_ripemd160"></a>
+<a id="@Specification_1_ripemd160"></a>
 
 ### Function `ripemd160`
 
@@ -531,7 +537,7 @@ Returns the BLAKE2B-256 hash of <code>bytes</code>.
 
 
 
-<a name="@Specification_1_blake2b_256"></a>
+<a id="@Specification_1_blake2b_256"></a>
 
 ### Function `blake2b_256`
 
@@ -549,7 +555,7 @@ Returns the BLAKE2B-256 hash of <code>bytes</code>.
 
 
 
-<a name="@Specification_1_sha2_512_internal"></a>
+<a id="@Specification_1_sha2_512_internal"></a>
 
 ### Function `sha2_512_internal`
 
@@ -567,7 +573,7 @@ Returns the BLAKE2B-256 hash of <code>bytes</code>.
 
 
 
-<a name="@Specification_1_sha3_512_internal"></a>
+<a id="@Specification_1_sha3_512_internal"></a>
 
 ### Function `sha3_512_internal`
 
@@ -585,7 +591,7 @@ Returns the BLAKE2B-256 hash of <code>bytes</code>.
 
 
 
-<a name="@Specification_1_ripemd160_internal"></a>
+<a id="@Specification_1_ripemd160_internal"></a>
 
 ### Function `ripemd160_internal`
 
@@ -603,7 +609,7 @@ Returns the BLAKE2B-256 hash of <code>bytes</code>.
 
 
 
-<a name="@Specification_1_blake2b_256_internal"></a>
+<a id="@Specification_1_blake2b_256_internal"></a>
 
 ### Function `blake2b_256_internal`
 

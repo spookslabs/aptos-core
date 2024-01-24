@@ -4,6 +4,15 @@ All notable changes to the Aptos Node SDK will be captured in this file. This ch
 
 ## Unreleased
 
+## 1.21.0 (2023-12-13)
+- Fix nested type tag parsing in `Object` types
+- Update all dependencies including `@aptos-labs/aptos-client`
+
+## 1.20.0 (2023-09-22)
+
+- Add current objects queries support - `getAccountOwnedObjects`
+- Add `burnObject` transaction support in `AptosToken`
+
 ## 1.19.0 (2023-08-24)
 
 - Add fungible asset queries support - `getAccountCoinsData`, `getAccountCoinsDataCount`

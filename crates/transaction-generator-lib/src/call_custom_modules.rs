@@ -135,8 +135,11 @@ impl CustomModulesDelegationGeneratorCreator {
                 2 * init_txn_factory.get_gas_unit_price() * init_txn_factory.get_max_gas_amount(),
             ));
 
-            let package = package_handler.pick_package(&mut rng, &publisher);
-            requests_publish.push(package.publish_transaction(&publisher, &init_txn_factory));
+            let package = package_handler.pick_package(&mut rng, publisher.address());
+
+            requests_publish.push(publisher.sign_with_transaction_builder(
+                init_txn_factory.payload(package.publish_transaction_payload()),
+            ));
 
             requests_initialize.append(&mut workload.initialize_package(
                 &package,
@@ -185,7 +188,7 @@ impl CustomModulesDelegationGeneratorCreator {
 }
 
 impl TransactionGeneratorCreator for CustomModulesDelegationGeneratorCreator {
-    fn create_transaction_generator(&mut self) -> Box<dyn TransactionGenerator> {
+    fn create_transaction_generator(&self) -> Box<dyn TransactionGenerator> {
         Box::new(CustomModulesDelegationGenerator::new(
             StdRng::from_entropy(),
             self.txn_factory.clone(),

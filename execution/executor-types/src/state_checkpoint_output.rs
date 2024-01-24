@@ -3,85 +3,93 @@
 
 #![forbid(unsafe_code)]
 
-use crate::ParsedTransactionOutput;
+use crate::parsed_transaction_output::TransactionsWithParsedOutput;
+use anyhow::{ensure, Result};
 use aptos_crypto::HashValue;
 use aptos_storage_interface::cached_state_view::ShardedStateCache;
-use aptos_types::{
-    state_store::ShardedStateUpdates,
-    transaction::{Transaction, TransactionStatus},
-};
+use aptos_types::{state_store::ShardedStateUpdates, transaction::TransactionStatus};
+use itertools::zip_eq;
 
 #[derive(Default)]
 pub struct TransactionsByStatus {
-    statuses: Vec<TransactionStatus>,
-    to_keep: Vec<(Transaction, ParsedTransactionOutput)>,
-    to_discard: Vec<Transaction>,
-    to_retry: Vec<Transaction>,
+    // Statuses of the input transactions, in the same order as the input transactions.
+    // Contains BlockMetadata/Validator transactions,
+    // but doesn't contain StateCheckpoint/BlockEpilogue, as those get added during execution
+    statuses_for_input_txns: Vec<TransactionStatus>,
+    // List of all transactions to be committed, including StateCheckpoint/BlockEpilogue if needed.
+    to_commit: TransactionsWithParsedOutput,
+    to_discard: TransactionsWithParsedOutput,
+    to_retry: TransactionsWithParsedOutput,
 }
 
 impl TransactionsByStatus {
     pub fn new(
-        status: Vec<TransactionStatus>,
-        to_keep: Vec<(Transaction, ParsedTransactionOutput)>,
-        to_discard: Vec<Transaction>,
-        to_retry: Vec<Transaction>,
+        statuses_for_input_txns: Vec<TransactionStatus>,
+        to_commit: TransactionsWithParsedOutput,
+        to_discard: TransactionsWithParsedOutput,
+        to_retry: TransactionsWithParsedOutput,
     ) -> Self {
         Self {
-            statuses: status,
-            to_keep,
+            statuses_for_input_txns,
+            to_commit,
             to_discard,
             to_retry,
         }
     }
 
-    pub fn num_txns_to_keep(&self) -> usize {
-        self.to_keep.len()
-    }
-
-    pub fn txn_statuses(&self) -> &[TransactionStatus] {
-        &self.statuses
+    pub fn input_txns_len(&self) -> usize {
+        self.statuses_for_input_txns.len()
     }
 
     pub fn into_inner(
         self,
     ) -> (
         Vec<TransactionStatus>,
-        Vec<(Transaction, ParsedTransactionOutput)>,
-        Vec<Transaction>,
-        Vec<Transaction>,
+        TransactionsWithParsedOutput,
+        TransactionsWithParsedOutput,
+        TransactionsWithParsedOutput,
     ) {
-        (self.statuses, self.to_keep, self.to_discard, self.to_retry)
+        (
+            self.statuses_for_input_txns,
+            self.to_commit,
+            self.to_discard,
+            self.to_retry,
+        )
     }
 }
 
 #[derive(Default)]
 pub struct StateCheckpointOutput {
     txns: TransactionsByStatus,
-    state_updates_vec: Vec<ShardedStateUpdates>,
+    per_version_state_updates: Vec<ShardedStateUpdates>,
     state_checkpoint_hashes: Vec<Option<HashValue>>,
-    block_state_updates: ShardedStateUpdates,
+    state_updates_before_last_checkpoint: Option<ShardedStateUpdates>,
     sharded_state_cache: ShardedStateCache,
 }
 
 impl StateCheckpointOutput {
     pub fn new(
         txns: TransactionsByStatus,
-        state_updates_vec: Vec<ShardedStateUpdates>,
+        per_version_state_updates: Vec<ShardedStateUpdates>,
         state_checkpoint_hashes: Vec<Option<HashValue>>,
-        block_state_updates: ShardedStateUpdates,
+        state_updates_before_last_checkpoint: Option<ShardedStateUpdates>,
         sharded_state_cache: ShardedStateCache,
     ) -> Self {
         Self {
             txns,
-            state_updates_vec,
+            per_version_state_updates,
             state_checkpoint_hashes,
-            block_state_updates,
+            state_updates_before_last_checkpoint,
             sharded_state_cache,
         }
     }
 
-    pub fn txn_statuses(&self) -> &[TransactionStatus] {
-        self.txns.txn_statuses()
+    pub fn input_txns_len(&self) -> usize {
+        self.txns.input_txns_len()
+    }
+
+    pub fn txns_to_commit_len(&self) -> usize {
+        self.txns.to_commit.len()
     }
 
     pub fn into_inner(
@@ -90,15 +98,41 @@ impl StateCheckpointOutput {
         TransactionsByStatus,
         Vec<ShardedStateUpdates>,
         Vec<Option<HashValue>>,
-        ShardedStateUpdates,
+        Option<ShardedStateUpdates>,
         ShardedStateCache,
     ) {
         (
             self.txns,
-            self.state_updates_vec,
+            self.per_version_state_updates,
             self.state_checkpoint_hashes,
-            self.block_state_updates,
+            self.state_updates_before_last_checkpoint,
             self.sharded_state_cache,
         )
+    }
+
+    pub fn check_and_update_state_checkpoint_hashes(
+        &mut self,
+        trusted_hashes: Vec<Option<HashValue>>,
+    ) -> Result<()> {
+        let len = self.state_checkpoint_hashes.len();
+        ensure!(
+            len == trusted_hashes.len(),
+            "Number of txns doesn't match. self: {len}, trusted: {}",
+            trusted_hashes.len()
+        );
+
+        zip_eq(
+            self.state_checkpoint_hashes.iter_mut(),
+            trusted_hashes.iter(),
+        )
+        .try_for_each(|(self_hash, trusted_hash)| {
+            if self_hash.is_none() && trusted_hash.is_some() {
+                *self_hash = *trusted_hash;
+            } else {
+                ensure!(self_hash == trusted_hash,
+                        "State checkpoint hash doesn't match, self: {self_hash:?}, trusted: {trusted_hash:?}");
+            }
+            Ok(())
+        })
     }
 }

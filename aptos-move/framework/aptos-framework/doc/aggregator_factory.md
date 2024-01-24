@@ -1,5 +1,5 @@
 
-<a name="0x1_aggregator_factory"></a>
+<a id="0x1_aggregator_factory"></a>
 
 # Module `0x1::aggregator_factory`
 
@@ -17,6 +17,7 @@ can be enabled for the public.
 -  [Function `create_aggregator`](#0x1_aggregator_factory_create_aggregator)
 -  [Function `new_aggregator`](#0x1_aggregator_factory_new_aggregator)
 -  [Specification](#@Specification_1)
+    -  [Module-level Specification](#@Module-level_Specification_2)
     -  [Function `initialize_aggregator_factory`](#@Specification_1_initialize_aggregator_factory)
     -  [Function `create_aggregator_internal`](#@Specification_1_create_aggregator_internal)
     -  [Function `create_aggregator`](#@Specification_1_create_aggregator)
@@ -31,7 +32,7 @@ can be enabled for the public.
 
 
 
-<a name="0x1_aggregator_factory_AggregatorFactory"></a>
+<a id="0x1_aggregator_factory_AggregatorFactory"></a>
 
 ## Resource `AggregatorFactory`
 
@@ -61,12 +62,12 @@ account can.
 
 </details>
 
-<a name="@Constants_0"></a>
+<a id="@Constants_0"></a>
 
 ## Constants
 
 
-<a name="0x1_aggregator_factory_EAGGREGATOR_FACTORY_NOT_FOUND"></a>
+<a id="0x1_aggregator_factory_EAGGREGATOR_FACTORY_NOT_FOUND"></a>
 
 Aggregator factory is not published yet.
 
@@ -76,7 +77,7 @@ Aggregator factory is not published yet.
 
 
 
-<a name="0x1_aggregator_factory_initialize_aggregator_factory"></a>
+<a id="0x1_aggregator_factory_initialize_aggregator_factory"></a>
 
 ## Function `initialize_aggregator_factory`
 
@@ -105,7 +106,7 @@ Creates a new factory for aggregators. Can only be called during genesis.
 
 </details>
 
-<a name="0x1_aggregator_factory_create_aggregator_internal"></a>
+<a id="0x1_aggregator_factory_create_aggregator_internal"></a>
 
 ## Function `create_aggregator_internal`
 
@@ -136,7 +137,7 @@ Creates a new aggregator instance which overflows on exceeding a <code>limit</co
 
 </details>
 
-<a name="0x1_aggregator_factory_create_aggregator"></a>
+<a id="0x1_aggregator_factory_create_aggregator"></a>
 
 ## Function `create_aggregator`
 
@@ -164,7 +165,7 @@ to allow any signer to call.
 
 </details>
 
-<a name="0x1_aggregator_factory_new_aggregator"></a>
+<a id="0x1_aggregator_factory_new_aggregator"></a>
 
 ## Function `new_aggregator`
 
@@ -187,9 +188,14 @@ Returns a new aggregator.
 
 </details>
 
-<a name="@Specification_1"></a>
+<a id="@Specification_1"></a>
 
 ## Specification
+
+
+<a id="@Module-level_Specification_2"></a>
+
+### Module-level Specification
 
 
 
@@ -198,7 +204,7 @@ Returns a new aggregator.
 
 
 
-<a name="@Specification_1_initialize_aggregator_factory"></a>
+<a id="@Specification_1_initialize_aggregator_factory"></a>
 
 ### Function `initialize_aggregator_factory`
 
@@ -219,7 +225,7 @@ AggregatorFactory is not under the caller before creating the resource.
 
 
 
-<a name="@Specification_1_create_aggregator_internal"></a>
+<a id="@Specification_1_create_aggregator_internal"></a>
 
 ### Function `create_aggregator_internal`
 
@@ -238,7 +244,7 @@ AggregatorFactory is not under the caller before creating the resource.
 
 
 
-<a name="0x1_aggregator_factory_CreateAggregatorInternalAbortsIf"></a>
+<a id="0x1_aggregator_factory_CreateAggregatorInternalAbortsIf"></a>
 
 
 <pre><code><b>schema</b> <a href="aggregator_factory.md#0x1_aggregator_factory_CreateAggregatorInternalAbortsIf">CreateAggregatorInternalAbortsIf</a> {
@@ -248,7 +254,7 @@ AggregatorFactory is not under the caller before creating the resource.
 
 
 
-<a name="@Specification_1_create_aggregator"></a>
+<a id="@Specification_1_create_aggregator"></a>
 
 ### Function `create_aggregator`
 
@@ -269,7 +275,7 @@ AggregatorFactory existed under the @aptos_framework when Creating a new aggrega
 
 
 
-<a name="0x1_aggregator_factory_spec_new_aggregator"></a>
+<a id="0x1_aggregator_factory_spec_new_aggregator"></a>
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="aggregator_factory.md#0x1_aggregator_factory_spec_new_aggregator">spec_new_aggregator</a>(limit: u128): Aggregator;
@@ -277,7 +283,7 @@ AggregatorFactory existed under the @aptos_framework when Creating a new aggrega
 
 
 
-<a name="@Specification_1_new_aggregator"></a>
+<a id="@Specification_1_new_aggregator"></a>
 
 ### Function `new_aggregator`
 

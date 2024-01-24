@@ -5,7 +5,9 @@ use crate::traits::GasAlgebra;
 use aptos_gas_algebra::{Fee, FeePerGasUnit, Gas, GasExpression, Octa};
 use aptos_gas_schedule::VMGasParameters;
 use aptos_logger::error;
-use aptos_vm_types::storage::StorageGasParameters;
+use aptos_vm_types::storage::{
+    io_pricing::IoPricing, space_pricing::DiskSpacePricing, StorageGasParameters,
+};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     gas_algebra::{InternalGas, InternalGasUnit},
@@ -21,6 +23,7 @@ pub struct StandardGasAlgebra {
     vm_gas_params: VMGasParameters,
     storage_gas_params: StorageGasParameters,
 
+    initial_balance: InternalGas,
     balance: InternalGas,
 
     execution_gas_used: InternalGas,
@@ -44,6 +47,7 @@ impl StandardGasAlgebra {
             feature_version: gas_feature_version,
             vm_gas_params,
             storage_gas_params,
+            initial_balance: balance,
             balance,
             execution_gas_used: 0.into(),
             io_gas_used: 0.into(),
@@ -54,15 +58,19 @@ impl StandardGasAlgebra {
 }
 
 impl StandardGasAlgebra {
-    fn charge(&mut self, amount: InternalGas) -> PartialVMResult<()> {
+    fn charge(&mut self, amount: InternalGas) -> (InternalGas, PartialVMResult<()>) {
         match self.balance.checked_sub(amount) {
             Some(new_balance) => {
                 self.balance = new_balance;
-                Ok(())
+                (amount, Ok(()))
             },
             None => {
+                let old_balance = self.balance;
                 self.balance = 0.into();
-                Err(PartialVMError::new(StatusCode::OUT_OF_GAS))
+                (
+                    old_balance,
+                    Err(PartialVMError::new(StatusCode::OUT_OF_GAS)),
+                )
             },
         }
     }
@@ -77,12 +85,50 @@ impl GasAlgebra for StandardGasAlgebra {
         &self.vm_gas_params
     }
 
-    fn storage_gas_params(&self) -> &StorageGasParameters {
-        &self.storage_gas_params
+    fn io_pricing(&self) -> &IoPricing {
+        &self.storage_gas_params.io_pricing
+    }
+
+    fn disk_space_pricing(&self) -> &DiskSpacePricing {
+        &self.storage_gas_params.space_pricing
     }
 
     fn balance_internal(&self) -> InternalGas {
         self.balance
+    }
+
+    fn check_consistency(&self) -> PartialVMResult<()> {
+        let total = self
+            .initial_balance
+            .checked_sub(self.balance)
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!(
+                        "Current balance ({}) exceedes the initial balance ({}) -- how is this ever possible?",
+                        self.balance,
+                        self.initial_balance
+                    ),
+                )
+            })?;
+
+        let total_calculated =
+            self.execution_gas_used + self.io_gas_used + self.storage_fee_in_internal_units;
+        if total != total_calculated {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                    format!(
+                        "The per-category costs do not add up. {} (total) != {} = {} (exec) + {} (io) + {} (storage)",
+                        total,
+                        total_calculated,
+                        self.execution_gas_used,
+                        self.io_gas_used,
+                        self.storage_fee_in_internal_units,
+                    ),
+                ),
+            );
+        }
+
+        Ok(())
     }
 
     fn charge_execution(
@@ -91,9 +137,15 @@ impl GasAlgebra for StandardGasAlgebra {
     ) -> PartialVMResult<()> {
         let amount = abstract_amount.evaluate(self.feature_version, &self.vm_gas_params);
 
-        self.charge(amount)?;
+        let (actual, res) = self.charge(amount);
+        if self.feature_version >= 12 {
+            self.execution_gas_used += actual;
+        }
+        res?;
 
-        self.execution_gas_used += amount;
+        if self.feature_version < 12 {
+            self.execution_gas_used += amount;
+        }
         if self.feature_version >= 7
             && self.execution_gas_used > self.vm_gas_params.txn.max_execution_gas
         {
@@ -109,9 +161,15 @@ impl GasAlgebra for StandardGasAlgebra {
     ) -> PartialVMResult<()> {
         let amount = abstract_amount.evaluate(self.feature_version, &self.vm_gas_params);
 
-        self.charge(amount)?;
+        let (actual, res) = self.charge(amount);
+        if self.feature_version >= 12 {
+            self.io_gas_used += actual;
+        }
+        res?;
 
-        self.io_gas_used += amount;
+        if self.feature_version < 12 {
+            self.io_gas_used += amount;
+        }
         if self.feature_version >= 7 && self.io_gas_used > self.vm_gas_params.txn.max_io_gas {
             Err(PartialVMError::new(StatusCode::IO_LIMIT_REACHED))
         } else {
@@ -156,10 +214,17 @@ impl GasAlgebra for StandardGasAlgebra {
             },
         );
 
-        self.charge(gas_consumed_internal)?;
+        let (actual, res) = self.charge(gas_consumed_internal);
+        if self.feature_version >= 12 {
+            self.storage_fee_in_internal_units += actual;
+            self.storage_fee_used += amount;
+        }
+        res?;
 
-        self.storage_fee_in_internal_units += gas_consumed_internal;
-        self.storage_fee_used += amount;
+        if self.feature_version < 12 {
+            self.storage_fee_in_internal_units += gas_consumed_internal;
+            self.storage_fee_used += amount;
+        }
         if self.feature_version >= 7
             && self.storage_fee_used > self.vm_gas_params.txn.max_storage_fee
         {

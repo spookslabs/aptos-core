@@ -1,61 +1,68 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::metrics::{LATEST_PROCESSED_VERSION, PROCESSED_VERSIONS_COUNT};
+use crate::metrics::{
+    LATEST_PROCESSED_VERSION as LATEST_PROCESSED_VERSION_OLD, PROCESSED_VERSIONS_COUNT,
+};
+use anyhow::{bail, Context, Result};
 use aptos_indexer_grpc_utils::{
     build_protobuf_encoded_transaction_wrappers,
     cache_operator::{CacheBatchGetStatus, CacheOperator},
     config::IndexerGrpcFileStoreConfig,
     constants::BLOB_STORAGE_SIZE,
+    counters::{log_grpc_step, IndexerGrpcStep},
     file_store_operator::{FileStoreOperator, GcsFileStoreOperator, LocalFileStoreOperator},
+    types::RedisUrl,
     EncodedTransactionWithVersion,
 };
 use aptos_moving_average::MovingAverage;
+use aptos_protos::transaction::v1::Transaction;
+use prost::Message;
 use std::time::Duration;
-use tracing::info;
 
 // If the version is ahead of the cache head, retry after a short sleep.
 const AHEAD_OF_CACHE_SLEEP_DURATION_IN_MILLIS: u64 = 100;
+const LARGE_FILE_BYTES_COUNT: usize = 100_000_000;
+const SERVICE_TYPE: &str = "file_worker";
 
 /// Processor tails the data in cache and stores the data in file store.
 pub struct Processor {
-    cache_operator: Option<CacheOperator<redis::aio::ConnectionManager>>,
-    file_store_processor: Option<Box<dyn FileStoreOperator>>,
-    cache_chain_id: Option<u64>,
-    redis_main_instance_address: String,
-    file_store_config: IndexerGrpcFileStoreConfig,
+    cache_operator: CacheOperator<redis::aio::ConnectionManager>,
+    file_store_operator: Box<dyn FileStoreOperator>,
+    cache_chain_id: u64,
+    enable_verbose_logging: bool,
 }
 
 impl Processor {
-    pub fn new(
-        redis_main_instance_address: String,
+    pub async fn new(
+        redis_main_instance_address: RedisUrl,
         file_store_config: IndexerGrpcFileStoreConfig,
-    ) -> Self {
-        Self {
-            cache_operator: None,
-            file_store_processor: None,
-            cache_chain_id: None,
-            redis_main_instance_address,
-            file_store_config,
-        }
-    }
-
-    /// Init the processor, including creating the redis connection and file store operator.
-    async fn init(&mut self) {
+        enable_verbose_logging: bool,
+    ) -> Result<Self> {
         // Connection to redis is a hard dependency for file store processor.
-        let conn = redis::Client::open(format!("redis://{}", self.redis_main_instance_address))
-            .expect("Create redis client failed.")
+        let conn = redis::Client::open(redis_main_instance_address.0.clone())
+            .with_context(|| {
+                format!(
+                    "Create redis client for {} failed",
+                    redis_main_instance_address.0
+                )
+            })?
             .get_tokio_connection_manager()
             .await
-            .expect("Create redis connection failed.");
+            .with_context(|| {
+                format!(
+                    "Create redis connection to {} failed.",
+                    redis_main_instance_address.0
+                )
+            })?;
 
         let mut cache_operator = CacheOperator::new(conn);
-        let chain_id = cache_operator
+        let cache_chain_id = cache_operator
             .get_chain_id()
             .await
-            .expect("Get chain id failed.");
+            .context("Get chain id failed.")?;
 
-        let file_store_operator: Box<dyn FileStoreOperator> = match &self.file_store_config {
+        let file_store_operator: Box<dyn FileStoreOperator> = match &file_store_config {
             IndexerGrpcFileStoreConfig::GcsFileStore(gcs_file_store) => {
                 Box::new(GcsFileStoreOperator::new(
                     gcs_file_store.gcs_file_store_bucket_name.clone(),
@@ -70,24 +77,24 @@ impl Processor {
         };
         file_store_operator.verify_storage_bucket_existence().await;
 
-        self.cache_operator = Some(cache_operator);
-        self.file_store_processor = Some(file_store_operator);
-        self.cache_chain_id = Some(chain_id);
+        Ok(Self {
+            cache_operator,
+            file_store_operator,
+            cache_chain_id,
+            enable_verbose_logging,
+        })
     }
 
     // Starts the processing.
-    pub async fn run(&mut self) {
-        self.init().await;
-        let cache_chain_id = self.cache_chain_id.unwrap();
+    pub async fn run(&mut self) -> Result<()> {
+        let cache_chain_id = self.cache_chain_id;
 
-        // If file store and cache chain id don't match, panic.
+        // If file store and cache chain id don't match, return an error.
         let metadata = self
-            .file_store_processor
-            .as_mut()
-            .unwrap()
+            .file_store_operator
             .create_default_file_store_metadata_if_absent(cache_chain_id)
             .await
-            .unwrap();
+            .context("Metadata did not match.")?;
 
         // This implements a two-cursor approach:
         //   * One curosr is to track the current cache version.
@@ -104,18 +111,17 @@ impl Processor {
             // 0. Data verfiication.
             // File store version has to be a multiple of BLOB_STORAGE_SIZE.
             if current_file_store_version % BLOB_STORAGE_SIZE as u64 != 0 {
-                panic!("File store version is not a multiple of BLOB_STORAGE_SIZE.");
+                bail!("File store version is not a multiple of BLOB_STORAGE_SIZE.");
             }
 
+            let file_store_upload_batch_start = std::time::Instant::now();
             let batch_get_result = self
                 .cache_operator
-                .as_mut()
-                .unwrap()
                 .batch_get_encoded_proto_data(current_cache_version)
                 .await;
 
             let batch_get_result =
-                fullnode_grpc_status_handling(batch_get_result, current_cache_version);
+                fullnode_grpc_status_handling(batch_get_result, current_cache_version)?;
 
             let current_transactions = match batch_get_result {
                 Some(transactions) => transactions,
@@ -136,32 +142,79 @@ impl Processor {
 
             // If not hit the head, we want to collect more transactions.
             if !hit_head && transactions_buffer.len() < 10 * BLOB_STORAGE_SIZE {
-                // If we haven't hit the head, we want to collect more transactions.
-                continue;
+                let total_size = transactions_buffer.iter().map(|t| t.0.len()).sum::<usize>();
+                // If we haven't hit the head and transactions are small,
+                // we want to collect more transactions.
+                if total_size < LARGE_FILE_BYTES_COUNT {
+                    // Skip only when current transactions are small.
+                    continue;
+                }
             }
             // If hit the head, we want to collect at least one batch of transactions.
             if hit_head && transactions_buffer.len() < BLOB_STORAGE_SIZE {
                 continue;
             }
+
+            // Final check to make sure the transactions buffer contains enough transactions.
+            if transactions_buffer.len() < BLOB_STORAGE_SIZE {
+                continue;
+            }
+
             // Drain the transactions buffer and upload to file store in size of multiple of BLOB_STORAGE_SIZE.
             let process_size = transactions_buffer.len() / BLOB_STORAGE_SIZE * BLOB_STORAGE_SIZE;
-            let current_batch = transactions_buffer.drain(..process_size).collect();
-
-            self.file_store_processor
-                .as_mut()
-                .unwrap()
+            let current_batch: Vec<EncodedTransactionWithVersion> =
+                transactions_buffer.drain(..process_size).collect();
+            let last_transaction = current_batch.as_slice().last().unwrap().clone();
+            let first_transaction = current_batch.as_slice().first().unwrap().clone();
+            self.file_store_operator
                 .upload_transactions(cache_chain_id, current_batch)
                 .await
-                .unwrap();
+                .context("Uploading transactions to file store failed.")?;
             PROCESSED_VERSIONS_COUNT.inc_by(process_size as u64);
             tps_calculator.tick_now(process_size as u64);
-            info!(
-                tps = (tps_calculator.avg() * 1000.0) as u64,
-                current_file_store_version = current_file_store_version,
-                "Upload transactions to file store."
+            let end_version = current_file_store_version + process_size as u64 - 1_u64;
+            let num_transactions = end_version - current_file_store_version + 1;
+
+            let mut start_version_timestamp = None;
+            let mut end_version_timestamp = None;
+            if self.enable_verbose_logging {
+                // This decoding may be inefficient, but this is the file store so we don't have to be overly
+                // concerned with efficiency.
+                start_version_timestamp = {
+                    let encoded_transaction = first_transaction.0;
+                    let decoded_transaction =
+                        base64::decode(encoded_transaction).expect("Failed to decode base64.");
+                    let transaction = Transaction::decode(&*decoded_transaction)
+                        .expect("Failed to decode protobuf.");
+                    transaction.timestamp
+                };
+                end_version_timestamp = {
+                    let encoded_transaction = last_transaction.0;
+                    let decoded_transaction =
+                        base64::decode(encoded_transaction).expect("Failed to decode base64.");
+                    let transaction = Transaction::decode(&*decoded_transaction)
+                        .expect("Failed to decode protobuf.");
+                    transaction.timestamp
+                };
+            }
+
+            // TODO: Split file store worker into more steps
+            log_grpc_step(
+                SERVICE_TYPE,
+                IndexerGrpcStep::FilestoreUploadTxns,
+                self.enable_verbose_logging,
+                Some(current_file_store_version as i64),
+                Some(end_version as i64),
+                start_version_timestamp.as_ref(),
+                end_version_timestamp.as_ref(),
+                Some(file_store_upload_batch_start.elapsed().as_secs_f64()),
+                None,
+                Some(num_transactions as i64),
+                None,
             );
+
             current_file_store_version += process_size as u64;
-            LATEST_PROCESSED_VERSION.set(current_file_store_version as i64);
+            LATEST_PROCESSED_VERSION_OLD.set(current_file_store_version as i64);
         }
     }
 }
@@ -169,19 +222,19 @@ impl Processor {
 fn fullnode_grpc_status_handling(
     fullnode_rpc_status: anyhow::Result<CacheBatchGetStatus>,
     batch_start_version: u64,
-) -> Option<Vec<EncodedTransactionWithVersion>> {
+) -> Result<Option<Vec<EncodedTransactionWithVersion>>> {
     match fullnode_rpc_status {
-        Ok(CacheBatchGetStatus::Ok(encoded_transactions)) => Some(
+        Ok(CacheBatchGetStatus::Ok(encoded_transactions)) => Ok(Some(
             build_protobuf_encoded_transaction_wrappers(encoded_transactions, batch_start_version),
-        ),
-        Ok(CacheBatchGetStatus::NotReady) => None,
+        )),
+        Ok(CacheBatchGetStatus::NotReady) => Ok(None),
         Ok(CacheBatchGetStatus::EvictedFromCache) => {
-            panic!(
-                "[indexer file]Cache evicted from cache. For file store worker, this is not expected."
+            bail!(
+                "[indexer file] Cache evicted from cache. For file store worker, this is not expected."
             );
         },
         Err(err) => {
-            panic!("Batch get encoded proto data failed: {}", err);
+            bail!("Batch get encoded proto data failed: {}", err);
         },
     }
 }
@@ -195,25 +248,27 @@ mod tests {
         let fullnode_rpc_status: anyhow::Result<CacheBatchGetStatus> =
             Ok(CacheBatchGetStatus::NotReady);
         let batch_start_version = 0;
-        assert!(fullnode_grpc_status_handling(fullnode_rpc_status, batch_start_version).is_none());
+        assert!(
+            fullnode_grpc_status_handling(fullnode_rpc_status, batch_start_version)
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
-    #[should_panic]
     fn verify_the_grpc_status_handling_evicted_from_cache() {
         let fullnode_rpc_status: anyhow::Result<CacheBatchGetStatus> =
             Ok(CacheBatchGetStatus::EvictedFromCache);
         let batch_start_version = 0;
-        fullnode_grpc_status_handling(fullnode_rpc_status, batch_start_version);
+        assert!(fullnode_grpc_status_handling(fullnode_rpc_status, batch_start_version).is_err());
     }
 
     #[test]
-    #[should_panic]
     fn verify_the_grpc_status_handling_error() {
         let fullnode_rpc_status: anyhow::Result<CacheBatchGetStatus> =
             Err(anyhow::anyhow!("Error"));
         let batch_start_version = 0;
-        fullnode_grpc_status_handling(fullnode_rpc_status, batch_start_version);
+        assert!(fullnode_grpc_status_handling(fullnode_rpc_status, batch_start_version).is_err());
     }
 
     #[test]
@@ -228,7 +283,7 @@ mod tests {
         let fullnode_rpc_status: anyhow::Result<CacheBatchGetStatus> =
             Ok(CacheBatchGetStatus::Ok(transactions));
         let actual_transactions =
-            fullnode_grpc_status_handling(fullnode_rpc_status, batch_start_version);
+            fullnode_grpc_status_handling(fullnode_rpc_status, batch_start_version).unwrap();
         assert!(actual_transactions.is_some());
         let actual_transactions = actual_transactions.unwrap();
         assert_eq!(actual_transactions, transactions_with_version);

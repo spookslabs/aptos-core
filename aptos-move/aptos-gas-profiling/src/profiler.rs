@@ -7,10 +7,8 @@ use crate::log::{
 };
 use aptos_gas_algebra::{Fee, FeePerGasUnit, InternalGas, NumArgs, NumBytes};
 use aptos_gas_meter::AptosGasMeter;
-use aptos_types::{
-    contract_event::ContractEvent, state_store::state_key::StateKey, write_set::WriteOp,
-};
-use aptos_vm_types::change_set::VMChangeSet;
+use aptos_types::{state_store::state_key::StateKey, write_set::WriteOpSize};
+use aptos_vm_types::{change_set::VMChangeSet, storage::space_pricing::ChargeAndRefund};
 use move_binary_format::{
     errors::{Location, PartialVMResult, VMResult},
     file_format::CodeOffset,
@@ -460,14 +458,14 @@ where
     }
 }
 
-fn write_op_type(op: &WriteOp) -> WriteOpType {
-    use WriteOp as O;
+fn write_op_type(op: &WriteOpSize) -> WriteOpType {
+    use WriteOpSize as O;
     use WriteOpType as T;
 
     match op {
-        O::Creation(..) | O::CreationWithMetadata { .. } => T::Creation,
-        O::Modification(..) | O::ModificationWithMetadata { .. } => T::Modification,
-        O::Deletion | O::DeletionWithMetadata { .. } => T::Deletion,
+        O::Creation { .. } => T::Creation,
+        O::Modification { .. } => T::Modification,
+        O::Deletion => T::Deletion,
     }
 }
 
@@ -479,18 +477,6 @@ where
 
     delegate! {
         fn algebra(&self) -> &Self::Algebra;
-
-        fn storage_fee_for_state_slot(&self, op: &WriteOp) -> Fee;
-
-        fn storage_fee_refund_for_state_slot(&self, op: &WriteOp) -> Fee;
-
-        fn storage_fee_for_state_bytes(&self, key: &StateKey, op: &WriteOp) -> Fee;
-
-        fn storage_fee_per_event(&self, event: &ContractEvent) -> Fee;
-
-        fn storage_discount_for_events(&self, total_cost: Fee) -> Fee;
-
-        fn storage_fee_for_transaction_storage(&self, txn_size: NumBytes) -> Fee;
     }
 
     delegate_mut! {
@@ -503,7 +489,7 @@ where
         ) -> PartialVMResult<()>;
     }
 
-    fn charge_io_gas_for_write(&mut self, key: &StateKey, op: &WriteOp) -> VMResult<()> {
+    fn charge_io_gas_for_write(&mut self, key: &StateKey, op: &WriteOpSize) -> VMResult<()> {
         let (cost, res) = self.delegate_charge(|base| base.charge_io_gas_for_write(key, op));
 
         self.total_exec_io += cost;
@@ -534,49 +520,50 @@ where
             return Ok(0.into());
         }
 
+        let pricing = self.disk_space_pricing();
+        let params = &self.vm_gas_params().txn;
+
         // Writes
         let mut write_fee = Fee::new(0);
         let mut write_set_storage = vec![];
         let mut total_refund = Fee::new(0);
-        for (key, op) in change_set.write_set_iter_mut() {
-            let slot_fee = self.storage_fee_for_state_slot(op);
-            let slot_refund = self.storage_fee_refund_for_state_slot(op);
-            let bytes_fee = self.storage_fee_for_state_bytes(key, op);
+        for (key, op_size, metadata_opt) in change_set.write_set_iter_mut() {
+            let ChargeAndRefund { charge, refund } =
+                pricing.charge_refund_write_op(params, key, &op_size, metadata_opt);
+            write_fee += charge;
+            total_refund += refund;
 
-            Self::maybe_record_storage_deposit(op, slot_fee);
-            total_refund += slot_refund;
-
-            let fee = slot_fee + bytes_fee;
             write_set_storage.push(WriteStorage {
                 key: key.clone(),
-                op_type: write_op_type(op),
-                cost: fee,
+                op_type: write_op_type(&op_size),
+                cost: charge,
+                refund,
             });
-            // TODO(gas): track storage refund in the profiler
-            write_fee += fee;
         }
 
         // Events
         let mut event_fee = Fee::new(0);
         let mut event_fees = vec![];
-        for event in change_set.events().iter() {
-            let fee = self.storage_fee_per_event(event);
+        for (event, _) in change_set.events().iter() {
+            let fee = pricing.storage_fee_per_event(params, event);
             event_fees.push(EventStorage {
                 ty: event.type_tag().clone(),
                 cost: fee,
             });
             event_fee += fee;
         }
-        let event_discount = self.storage_discount_for_events(event_fee);
+        let event_discount = pricing.storage_discount_for_events(params, event_fee);
         let event_fee_with_discount = event_fee
             .checked_sub(event_discount)
             .expect("discount should always be less than or equal to total amount");
 
         // Txn
-        let txn_fee = self.storage_fee_for_transaction_storage(txn_size);
+        let txn_fee = pricing.storage_fee_for_transaction_storage(params, txn_size);
 
         self.storage_fees = Some(StorageFees {
             total: write_fee + event_fee + txn_fee,
+            total_refund,
+
             write_set_storage,
             events: event_fees,
             event_discount,
@@ -614,21 +601,25 @@ where
             last.events.push(ExecutionGasEvent::Call(cur));
         }
 
-        TransactionGasLog {
-            exec_io: ExecutionAndIOCosts {
-                gas_scaling_factor: self.base.gas_unit_scaling_factor(),
-                total: self.total_exec_io,
-                intrinsic_cost: self.intrinsic_cost.unwrap_or_else(|| 0.into()),
-                call_graph: self.frames.pop().expect("frame must exist"),
-                write_set_transient: self.write_set_transient,
-            },
-            storage: self.storage_fees.unwrap_or_else(|| StorageFees {
-                total: 0.into(),
-                write_set_storage: vec![],
-                events: vec![],
-                event_discount: 0.into(),
-                txn_storage: 0.into(),
-            }),
-        }
+        let exec_io = ExecutionAndIOCosts {
+            gas_scaling_factor: self.base.gas_unit_scaling_factor(),
+            total: self.total_exec_io,
+            intrinsic_cost: self.intrinsic_cost.unwrap_or_else(|| 0.into()),
+            call_graph: self.frames.pop().expect("frame must exist"),
+            write_set_transient: self.write_set_transient,
+        };
+        exec_io.assert_consistency();
+
+        let storage = self.storage_fees.unwrap_or_else(|| StorageFees {
+            total: 0.into(),
+            total_refund: 0.into(),
+            write_set_storage: vec![],
+            events: vec![],
+            event_discount: 0.into(),
+            txn_storage: 0.into(),
+        });
+        storage.assert_consistency();
+
+        TransactionGasLog { exec_io, storage }
     }
 }

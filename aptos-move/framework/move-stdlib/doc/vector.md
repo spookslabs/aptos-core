@@ -1,5 +1,5 @@
 
-<a name="0x1_vector"></a>
+<a id="0x1_vector"></a>
 
 # Module `0x1::vector`
 
@@ -64,7 +64,8 @@ the return on investment didn't seem worth it for these simple functions.
 -  [Function `all`](#0x1_vector_all)
 -  [Function `destroy`](#0x1_vector_destroy)
 -  [Specification](#@Specification_1)
-    -  [Helper Functions](#@Helper_Functions_2)
+    -  [Module-level Specification](#@Module-level_Specification_2)
+    -  [Helper Functions](#@Helper_Functions_3)
     -  [Function `singleton`](#@Specification_1_singleton)
     -  [Function `reverse`](#@Specification_1_reverse)
     -  [Function `reverse_slice`](#@Specification_1_reverse_slice)
@@ -87,12 +88,12 @@ the return on investment didn't seem worth it for these simple functions.
 
 
 
-<a name="@Constants_0"></a>
+<a id="@Constants_0"></a>
 
 ## Constants
 
 
-<a name="0x1_vector_EINDEX_OUT_OF_BOUNDS"></a>
+<a id="0x1_vector_EINDEX_OUT_OF_BOUNDS"></a>
 
 The index into the vector is out of bounds
 
@@ -102,7 +103,7 @@ The index into the vector is out of bounds
 
 
 
-<a name="0x1_vector_EINVALID_RANGE"></a>
+<a id="0x1_vector_EINVALID_RANGE"></a>
 
 The index into the vector is out of bounds
 
@@ -112,7 +113,7 @@ The index into the vector is out of bounds
 
 
 
-<a name="0x1_vector_EVECTORS_LENGTH_MISMATCH"></a>
+<a id="0x1_vector_EVECTORS_LENGTH_MISMATCH"></a>
 
 The length of the vectors are not equal.
 
@@ -122,7 +123,7 @@ The length of the vectors are not equal.
 
 
 
-<a name="0x1_vector_empty"></a>
+<a id="0x1_vector_empty"></a>
 
 ## Function `empty`
 
@@ -146,7 +147,7 @@ Create an empty vector.
 
 </details>
 
-<a name="0x1_vector_length"></a>
+<a id="0x1_vector_length"></a>
 
 ## Function `length`
 
@@ -170,7 +171,7 @@ Return the length of the vector.
 
 </details>
 
-<a name="0x1_vector_borrow"></a>
+<a id="0x1_vector_borrow"></a>
 
 ## Function `borrow`
 
@@ -195,7 +196,7 @@ Aborts if <code>i</code> is out of bounds.
 
 </details>
 
-<a name="0x1_vector_push_back"></a>
+<a id="0x1_vector_push_back"></a>
 
 ## Function `push_back`
 
@@ -219,7 +220,7 @@ Add element <code>e</code> to the end of the vector <code>v</code>.
 
 </details>
 
-<a name="0x1_vector_borrow_mut"></a>
+<a id="0x1_vector_borrow_mut"></a>
 
 ## Function `borrow_mut`
 
@@ -244,7 +245,7 @@ Aborts if <code>i</code> is out of bounds.
 
 </details>
 
-<a name="0x1_vector_pop_back"></a>
+<a id="0x1_vector_pop_back"></a>
 
 ## Function `pop_back`
 
@@ -269,7 +270,7 @@ Aborts if <code>v</code> is empty.
 
 </details>
 
-<a name="0x1_vector_destroy_empty"></a>
+<a id="0x1_vector_destroy_empty"></a>
 
 ## Function `destroy_empty`
 
@@ -294,7 +295,7 @@ Aborts if <code>v</code> is not empty.
 
 </details>
 
-<a name="0x1_vector_swap"></a>
+<a id="0x1_vector_swap"></a>
 
 ## Function `swap`
 
@@ -319,7 +320,7 @@ Aborts if <code>i</code> or <code>j</code> is out of bounds.
 
 </details>
 
-<a name="0x1_vector_singleton"></a>
+<a id="0x1_vector_singleton"></a>
 
 ## Function `singleton`
 
@@ -346,7 +347,7 @@ Return an vector of size one containing element <code>e</code>.
 
 </details>
 
-<a name="0x1_vector_reverse"></a>
+<a id="0x1_vector_reverse"></a>
 
 ## Function `reverse`
 
@@ -372,7 +373,7 @@ Reverses the order of the elements in the vector <code>v</code> in place.
 
 </details>
 
-<a name="0x1_vector_reverse_slice"></a>
+<a id="0x1_vector_reverse_slice"></a>
 
 ## Function `reverse_slice`
 
@@ -404,7 +405,7 @@ Reverses the order of the elements [left, right) in the vector <code>v</code> in
 
 </details>
 
-<a name="0x1_vector_append"></a>
+<a id="0x1_vector_append"></a>
 
 ## Function `append`
 
@@ -430,7 +431,7 @@ Pushes all of the elements of the <code>other</code> vector into the <code>lhs</
 
 </details>
 
-<a name="0x1_vector_reverse_append"></a>
+<a id="0x1_vector_reverse_append"></a>
 
 ## Function `reverse_append`
 
@@ -460,7 +461,7 @@ Pushes all of the elements of the <code>other</code> vector into the <code>lhs</
 
 </details>
 
-<a name="0x1_vector_trim"></a>
+<a id="0x1_vector_trim"></a>
 
 ## Function `trim`
 
@@ -487,7 +488,7 @@ Trim a vector to a smaller size, returning the evicted elements in order
 
 </details>
 
-<a name="0x1_vector_trim_reverse"></a>
+<a id="0x1_vector_trim_reverse"></a>
 
 ## Function `trim_reverse`
 
@@ -519,7 +520,7 @@ Trim a vector to a smaller size, returning the evicted elements in reverse order
 
 </details>
 
-<a name="0x1_vector_is_empty"></a>
+<a id="0x1_vector_is_empty"></a>
 
 ## Function `is_empty`
 
@@ -544,7 +545,7 @@ Return <code><b>true</b></code> if the vector <code>v</code> has no elements and
 
 </details>
 
-<a name="0x1_vector_contains"></a>
+<a id="0x1_vector_contains"></a>
 
 ## Function `contains`
 
@@ -575,7 +576,7 @@ Return true if <code>e</code> is in the vector <code>v</code>.
 
 </details>
 
-<a name="0x1_vector_index_of"></a>
+<a id="0x1_vector_index_of"></a>
 
 ## Function `index_of`
 
@@ -607,7 +608,7 @@ Otherwise, returns <code>(<b>false</b>, 0)</code>.
 
 </details>
 
-<a name="0x1_vector_find"></a>
+<a id="0x1_vector_find"></a>
 
 ## Function `find`
 
@@ -647,7 +648,7 @@ Otherwise, returns <code>(<b>false</b>, 0)</code>.
 
 </details>
 
-<a name="0x1_vector_insert"></a>
+<a id="0x1_vector_insert"></a>
 
 ## Function `insert`
 
@@ -679,7 +680,7 @@ Aborts if out of bounds.
 
 </details>
 
-<a name="0x1_vector_remove"></a>
+<a id="0x1_vector_remove"></a>
 
 ## Function `remove`
 
@@ -712,7 +713,7 @@ Aborts if <code>i</code> is out of bounds.
 
 </details>
 
-<a name="0x1_vector_remove_value"></a>
+<a id="0x1_vector_remove_value"></a>
 
 ## Function `remove_value`
 
@@ -749,7 +750,7 @@ and vector.
 
 </details>
 
-<a name="0x1_vector_swap_remove"></a>
+<a id="0x1_vector_swap_remove"></a>
 
 ## Function `swap_remove`
 
@@ -779,7 +780,7 @@ Aborts if <code>i</code> is out of bounds.
 
 </details>
 
-<a name="0x1_vector_for_each"></a>
+<a id="0x1_vector_for_each"></a>
 
 ## Function `for_each`
 
@@ -805,7 +806,7 @@ Apply the function to each element in the vector, consuming it.
 
 </details>
 
-<a name="0x1_vector_for_each_reverse"></a>
+<a id="0x1_vector_for_each_reverse"></a>
 
 ## Function `for_each_reverse`
 
@@ -835,7 +836,7 @@ Apply the function to each element in the vector, consuming it.
 
 </details>
 
-<a name="0x1_vector_for_each_ref"></a>
+<a id="0x1_vector_for_each_ref"></a>
 
 ## Function `for_each_ref`
 
@@ -865,7 +866,7 @@ Apply the function to a reference of each element in the vector.
 
 </details>
 
-<a name="0x1_vector_zip"></a>
+<a id="0x1_vector_zip"></a>
 
 ## Function `zip`
 
@@ -893,7 +894,7 @@ Apply the function to each pair of elements in the two given vectors, consuming 
 
 </details>
 
-<a name="0x1_vector_zip_reverse"></a>
+<a id="0x1_vector_zip_reverse"></a>
 
 ## Function `zip_reverse`
 
@@ -932,7 +933,7 @@ This errors out if the vectors are not of the same length.
 
 </details>
 
-<a name="0x1_vector_zip_ref"></a>
+<a id="0x1_vector_zip_ref"></a>
 
 ## Function `zip_ref`
 
@@ -970,7 +971,7 @@ This errors out if the vectors are not of the same length.
 
 </details>
 
-<a name="0x1_vector_enumerate_ref"></a>
+<a id="0x1_vector_enumerate_ref"></a>
 
 ## Function `enumerate_ref`
 
@@ -1000,7 +1001,7 @@ Apply the function to a reference of each element in the vector with its index.
 
 </details>
 
-<a name="0x1_vector_for_each_mut"></a>
+<a id="0x1_vector_for_each_mut"></a>
 
 ## Function `for_each_mut`
 
@@ -1030,7 +1031,7 @@ Apply the function to a mutable reference to each element in the vector.
 
 </details>
 
-<a name="0x1_vector_zip_mut"></a>
+<a id="0x1_vector_zip_mut"></a>
 
 ## Function `zip_mut`
 
@@ -1068,7 +1069,7 @@ This errors out if the vectors are not of the same length.
 
 </details>
 
-<a name="0x1_vector_enumerate_mut"></a>
+<a id="0x1_vector_enumerate_mut"></a>
 
 ## Function `enumerate_mut`
 
@@ -1098,7 +1099,7 @@ Apply the function to a mutable reference of each element in the vector with its
 
 </details>
 
-<a name="0x1_vector_fold"></a>
+<a id="0x1_vector_fold"></a>
 
 ## Function `fold`
 
@@ -1130,7 +1131,7 @@ Fold the function over the elements. For example, <code><a href="vector.md#0x1_v
 
 </details>
 
-<a name="0x1_vector_foldr"></a>
+<a id="0x1_vector_foldr"></a>
 
 ## Function `foldr`
 
@@ -1162,7 +1163,7 @@ Fold right like fold above but working right to left. For example, <code><a href
 
 </details>
 
-<a name="0x1_vector_map_ref"></a>
+<a id="0x1_vector_map_ref"></a>
 
 ## Function `map_ref`
 
@@ -1193,7 +1194,7 @@ original vector.
 
 </details>
 
-<a name="0x1_vector_zip_map_ref"></a>
+<a id="0x1_vector_zip_map_ref"></a>
 
 ## Function `zip_map_ref`
 
@@ -1229,7 +1230,7 @@ values without modifying the original vectors.
 
 </details>
 
-<a name="0x1_vector_map"></a>
+<a id="0x1_vector_map"></a>
 
 ## Function `map`
 
@@ -1259,7 +1260,7 @@ Map the function over the elements of the vector, producing a new vector.
 
 </details>
 
-<a name="0x1_vector_zip_map"></a>
+<a id="0x1_vector_zip_map"></a>
 
 ## Function `zip_map`
 
@@ -1294,7 +1295,7 @@ Map the function over the element pairs of the two vectors, producing a new vect
 
 </details>
 
-<a name="0x1_vector_filter"></a>
+<a id="0x1_vector_filter"></a>
 
 ## Function `filter`
 
@@ -1326,7 +1327,7 @@ Filter the vector using the boolean function, removing all elements for which <c
 
 </details>
 
-<a name="0x1_vector_partition"></a>
+<a id="0x1_vector_partition"></a>
 
 ## Function `partition`
 
@@ -1371,7 +1372,7 @@ BUT NOT for the elements for which pred is false.
 
 </details>
 
-<a name="0x1_vector_rotate"></a>
+<a id="0x1_vector_rotate"></a>
 
 ## Function `rotate`
 
@@ -1401,7 +1402,7 @@ ie. 3 in the example above
 
 </details>
 
-<a name="0x1_vector_rotate_slice"></a>
+<a id="0x1_vector_rotate_slice"></a>
 
 ## Function `rotate_slice`
 
@@ -1435,7 +1436,7 @@ returns the
 
 </details>
 
-<a name="0x1_vector_stable_partition"></a>
+<a id="0x1_vector_stable_partition"></a>
 
 ## Function `stable_partition`
 
@@ -1479,7 +1480,7 @@ preserves the relative order of the elements in the two partitions.
 
 </details>
 
-<a name="0x1_vector_any"></a>
+<a id="0x1_vector_any"></a>
 
 ## Function `any`
 
@@ -1516,7 +1517,7 @@ Return true if any element in the vector satisfies the predicate.
 
 </details>
 
-<a name="0x1_vector_all"></a>
+<a id="0x1_vector_all"></a>
 
 ## Function `all`
 
@@ -1553,7 +1554,7 @@ Return true if all elements in the vector satisfy the predicate.
 
 </details>
 
-<a name="0x1_vector_destroy"></a>
+<a id="0x1_vector_destroy"></a>
 
 ## Function `destroy`
 
@@ -1582,13 +1583,18 @@ when used in the context of destroying a vector.
 
 </details>
 
-<a name="@Specification_1"></a>
+<a id="@Specification_1"></a>
 
 ## Specification
 
 
+<a id="@Module-level_Specification_2"></a>
 
-<a name="@Helper_Functions_2"></a>
+### Module-level Specification
+
+
+
+<a id="@Helper_Functions_3"></a>
 
 ### Helper Functions
 
@@ -1596,7 +1602,7 @@ when used in the context of destroying a vector.
 Check if <code>v1</code> is equal to the result of adding <code>e</code> at the end of <code>v2</code>
 
 
-<a name="0x1_vector_eq_push_back"></a>
+<a id="0x1_vector_eq_push_back"></a>
 
 
 <pre><code><b>fun</b> <a href="vector.md#0x1_vector_eq_push_back">eq_push_back</a>&lt;Element&gt;(v1: <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;, v2: <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;, e: Element): bool {
@@ -1610,7 +1616,7 @@ Check if <code>v1</code> is equal to the result of adding <code>e</code> at the 
 Check if <code>v</code> is equal to the result of concatenating <code>v1</code> and <code>v2</code>
 
 
-<a name="0x1_vector_eq_append"></a>
+<a id="0x1_vector_eq_append"></a>
 
 
 <pre><code><b>fun</b> <a href="vector.md#0x1_vector_eq_append">eq_append</a>&lt;Element&gt;(v: <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;, v1: <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;, v2: <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;): bool {
@@ -1624,7 +1630,7 @@ Check if <code>v</code> is equal to the result of concatenating <code>v1</code> 
 Check <code>v1</code> is equal to the result of removing the first element of <code>v2</code>
 
 
-<a name="0x1_vector_eq_pop_front"></a>
+<a id="0x1_vector_eq_pop_front"></a>
 
 
 <pre><code><b>fun</b> <a href="vector.md#0x1_vector_eq_pop_front">eq_pop_front</a>&lt;Element&gt;(v1: <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;, v2: <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;): bool {
@@ -1637,7 +1643,7 @@ Check <code>v1</code> is equal to the result of removing the first element of <c
 Check that <code>v1</code> is equal to the result of removing the element at index <code>i</code> from <code>v2</code>.
 
 
-<a name="0x1_vector_eq_remove_elem_at_index"></a>
+<a id="0x1_vector_eq_remove_elem_at_index"></a>
 
 
 <pre><code><b>fun</b> <a href="vector.md#0x1_vector_eq_remove_elem_at_index">eq_remove_elem_at_index</a>&lt;Element&gt;(i: u64, v1: <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;, v2: <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;): bool {
@@ -1651,7 +1657,7 @@ Check that <code>v1</code> is equal to the result of removing the element at ind
 Check if <code>v</code> contains <code>e</code>.
 
 
-<a name="0x1_vector_spec_contains"></a>
+<a id="0x1_vector_spec_contains"></a>
 
 
 <pre><code><b>fun</b> <a href="vector.md#0x1_vector_spec_contains">spec_contains</a>&lt;Element&gt;(v: <a href="vector.md#0x1_vector">vector</a>&lt;Element&gt;, e: Element): bool {
@@ -1661,7 +1667,7 @@ Check if <code>v</code> contains <code>e</code>.
 
 
 
-<a name="@Specification_1_singleton"></a>
+<a id="@Specification_1_singleton"></a>
 
 ### Function `singleton`
 
@@ -1678,7 +1684,7 @@ Check if <code>v</code> contains <code>e</code>.
 
 
 
-<a name="@Specification_1_reverse"></a>
+<a id="@Specification_1_reverse"></a>
 
 ### Function `reverse`
 
@@ -1694,7 +1700,7 @@ Check if <code>v</code> contains <code>e</code>.
 
 
 
-<a name="@Specification_1_reverse_slice"></a>
+<a id="@Specification_1_reverse_slice"></a>
 
 ### Function `reverse_slice`
 
@@ -1710,7 +1716,7 @@ Check if <code>v</code> contains <code>e</code>.
 
 
 
-<a name="@Specification_1_append"></a>
+<a id="@Specification_1_append"></a>
 
 ### Function `append`
 
@@ -1726,7 +1732,7 @@ Check if <code>v</code> contains <code>e</code>.
 
 
 
-<a name="@Specification_1_reverse_append"></a>
+<a id="@Specification_1_reverse_append"></a>
 
 ### Function `reverse_append`
 
@@ -1742,7 +1748,7 @@ Check if <code>v</code> contains <code>e</code>.
 
 
 
-<a name="@Specification_1_trim"></a>
+<a id="@Specification_1_trim"></a>
 
 ### Function `trim`
 
@@ -1758,7 +1764,7 @@ Check if <code>v</code> contains <code>e</code>.
 
 
 
-<a name="@Specification_1_trim_reverse"></a>
+<a id="@Specification_1_trim_reverse"></a>
 
 ### Function `trim_reverse`
 
@@ -1774,7 +1780,7 @@ Check if <code>v</code> contains <code>e</code>.
 
 
 
-<a name="@Specification_1_is_empty"></a>
+<a id="@Specification_1_is_empty"></a>
 
 ### Function `is_empty`
 
@@ -1790,7 +1796,7 @@ Check if <code>v</code> contains <code>e</code>.
 
 
 
-<a name="@Specification_1_contains"></a>
+<a id="@Specification_1_contains"></a>
 
 ### Function `contains`
 
@@ -1806,7 +1812,7 @@ Check if <code>v</code> contains <code>e</code>.
 
 
 
-<a name="@Specification_1_index_of"></a>
+<a id="@Specification_1_index_of"></a>
 
 ### Function `index_of`
 
@@ -1822,7 +1828,7 @@ Check if <code>v</code> contains <code>e</code>.
 
 
 
-<a name="@Specification_1_insert"></a>
+<a id="@Specification_1_insert"></a>
 
 ### Function `insert`
 
@@ -1838,7 +1844,7 @@ Check if <code>v</code> contains <code>e</code>.
 
 
 
-<a name="@Specification_1_remove"></a>
+<a id="@Specification_1_remove"></a>
 
 ### Function `remove`
 
@@ -1854,7 +1860,7 @@ Check if <code>v</code> contains <code>e</code>.
 
 
 
-<a name="@Specification_1_remove_value"></a>
+<a id="@Specification_1_remove_value"></a>
 
 ### Function `remove_value`
 
@@ -1870,7 +1876,7 @@ Check if <code>v</code> contains <code>e</code>.
 
 
 
-<a name="@Specification_1_swap_remove"></a>
+<a id="@Specification_1_swap_remove"></a>
 
 ### Function `swap_remove`
 
@@ -1886,7 +1892,7 @@ Check if <code>v</code> contains <code>e</code>.
 
 
 
-<a name="@Specification_1_rotate"></a>
+<a id="@Specification_1_rotate"></a>
 
 ### Function `rotate`
 
@@ -1902,7 +1908,7 @@ Check if <code>v</code> contains <code>e</code>.
 
 
 
-<a name="@Specification_1_rotate_slice"></a>
+<a id="@Specification_1_rotate_slice"></a>
 
 ### Function `rotate_slice`
 

@@ -1,5 +1,5 @@
 
-<a name="0x3_token_transfers"></a>
+<a id="0x3_token_transfers"></a>
 
 # Module `0x3::token_transfers`
 
@@ -21,6 +21,7 @@ This module provides the foundation for transferring of Tokens
 -  [Function `cancel_offer_script`](#0x3_token_transfers_cancel_offer_script)
 -  [Function `cancel_offer`](#0x3_token_transfers_cancel_offer)
 -  [Specification](#@Specification_1)
+    -  [Module-level Specification](#@Module-level_Specification_2)
     -  [Function `initialize_token_transfers`](#@Specification_1_initialize_token_transfers)
     -  [Function `create_token_offer_id`](#@Specification_1_create_token_offer_id)
     -  [Function `offer_script`](#@Specification_1_offer_script)
@@ -42,7 +43,7 @@ This module provides the foundation for transferring of Tokens
 
 
 
-<a name="0x3_token_transfers_PendingClaims"></a>
+<a id="0x3_token_transfers_PendingClaims"></a>
 
 ## Resource `PendingClaims`
 
@@ -87,7 +88,7 @@ This module provides the foundation for transferring of Tokens
 
 </details>
 
-<a name="0x3_token_transfers_TokenOfferId"></a>
+<a id="0x3_token_transfers_TokenOfferId"></a>
 
 ## Struct `TokenOfferId`
 
@@ -120,7 +121,7 @@ This module provides the foundation for transferring of Tokens
 
 </details>
 
-<a name="0x3_token_transfers_TokenOfferEvent"></a>
+<a id="0x3_token_transfers_TokenOfferEvent"></a>
 
 ## Struct `TokenOfferEvent`
 
@@ -159,7 +160,7 @@ This module provides the foundation for transferring of Tokens
 
 </details>
 
-<a name="0x3_token_transfers_TokenCancelOfferEvent"></a>
+<a id="0x3_token_transfers_TokenCancelOfferEvent"></a>
 
 ## Struct `TokenCancelOfferEvent`
 
@@ -198,7 +199,7 @@ This module provides the foundation for transferring of Tokens
 
 </details>
 
-<a name="0x3_token_transfers_TokenClaimEvent"></a>
+<a id="0x3_token_transfers_TokenClaimEvent"></a>
 
 ## Struct `TokenClaimEvent`
 
@@ -237,12 +238,12 @@ This module provides the foundation for transferring of Tokens
 
 </details>
 
-<a name="@Constants_0"></a>
+<a id="@Constants_0"></a>
 
 ## Constants
 
 
-<a name="0x3_token_transfers_ETOKEN_OFFER_NOT_EXIST"></a>
+<a id="0x3_token_transfers_ETOKEN_OFFER_NOT_EXIST"></a>
 
 Token offer doesn't exist
 
@@ -252,7 +253,7 @@ Token offer doesn't exist
 
 
 
-<a name="0x3_token_transfers_initialize_token_transfers"></a>
+<a id="0x3_token_transfers_initialize_token_transfers"></a>
 
 ## Function `initialize_token_transfers`
 
@@ -284,7 +285,7 @@ Token offer doesn't exist
 
 </details>
 
-<a name="0x3_token_transfers_create_token_offer_id"></a>
+<a id="0x3_token_transfers_create_token_offer_id"></a>
 
 ## Function `create_token_offer_id`
 
@@ -311,7 +312,7 @@ Token offer doesn't exist
 
 </details>
 
-<a name="0x3_token_transfers_offer_script"></a>
+<a id="0x3_token_transfers_offer_script"></a>
 
 ## Function `offer_script`
 
@@ -344,7 +345,7 @@ Token offer doesn't exist
 
 </details>
 
-<a name="0x3_token_transfers_offer"></a>
+<a id="0x3_token_transfers_offer"></a>
 
 ## Function `offer`
 
@@ -396,7 +397,7 @@ Token offer doesn't exist
 
 </details>
 
-<a name="0x3_token_transfers_claim_script"></a>
+<a id="0x3_token_transfers_claim_script"></a>
 
 ## Function `claim_script`
 
@@ -428,7 +429,7 @@ Token offer doesn't exist
 
 </details>
 
-<a name="0x3_token_transfers_claim"></a>
+<a id="0x3_token_transfers_claim"></a>
 
 ## Function `claim`
 
@@ -472,7 +473,7 @@ Token offer doesn't exist
 
 </details>
 
-<a name="0x3_token_transfers_cancel_offer_script"></a>
+<a id="0x3_token_transfers_cancel_offer_script"></a>
 
 ## Function `cancel_offer_script`
 
@@ -504,7 +505,7 @@ Token offer doesn't exist
 
 </details>
 
-<a name="0x3_token_transfers_cancel_offer"></a>
+<a id="0x3_token_transfers_cancel_offer"></a>
 
 ## Function `cancel_offer`
 
@@ -548,9 +549,14 @@ Token offer doesn't exist
 
 </details>
 
-<a name="@Specification_1"></a>
+<a id="@Specification_1"></a>
 
 ## Specification
+
+
+<a id="@Module-level_Specification_2"></a>
+
+### Module-level Specification
 
 
 
@@ -560,7 +566,7 @@ Token offer doesn't exist
 
 
 
-<a name="@Specification_1_initialize_token_transfers"></a>
+<a id="@Specification_1_initialize_token_transfers"></a>
 
 ### Function `initialize_token_transfers`
 
@@ -578,7 +584,7 @@ Token offer doesn't exist
 Abort according to the code
 
 
-<a name="0x3_token_transfers_InitializeTokenTransfersAbortsIf"></a>
+<a id="0x3_token_transfers_InitializeTokenTransfersAbortsIf"></a>
 
 
 <pre><code><b>schema</b> <a href="token_transfers.md#0x3_token_transfers_InitializeTokenTransfersAbortsIf">InitializeTokenTransfersAbortsIf</a> {
@@ -594,7 +600,7 @@ Abort according to the code
 
 
 
-<a name="@Specification_1_create_token_offer_id"></a>
+<a id="@Specification_1_create_token_offer_id"></a>
 
 ### Function `create_token_offer_id`
 
@@ -610,7 +616,7 @@ Abort according to the code
 
 
 
-<a name="@Specification_1_offer_script"></a>
+<a id="@Specification_1_offer_script"></a>
 
 ### Function `offer_script`
 
@@ -627,7 +633,7 @@ Abort according to the code
 
 
 
-<a name="@Specification_1_offer"></a>
+<a id="@Specification_1_offer"></a>
 
 ### Function `offer`
 
@@ -658,7 +664,7 @@ Abort according to the code
 Get the amount from sender token
 
 
-<a name="0x3_token_transfers_spce_get"></a>
+<a id="0x3_token_transfers_spce_get"></a>
 
 
 <pre><code><b>fun</b> <a href="token_transfers.md#0x3_token_transfers_spce_get">spce_get</a>(
@@ -680,7 +686,7 @@ Get the amount from sender token
 
 
 
-<a name="@Specification_1_claim_script"></a>
+<a id="@Specification_1_claim_script"></a>
 
 ### Function `claim_script`
 
@@ -709,7 +715,7 @@ Get the amount from sender token
 
 
 
-<a name="@Specification_1_claim"></a>
+<a id="@Specification_1_claim"></a>
 
 ### Function `claim`
 
@@ -737,7 +743,7 @@ Get the amount from sender token
 
 
 
-<a name="@Specification_1_cancel_offer_script"></a>
+<a id="@Specification_1_cancel_offer_script"></a>
 
 ### Function `cancel_offer_script`
 
@@ -767,7 +773,7 @@ Get the amount from sender token
 
 
 
-<a name="@Specification_1_cancel_offer"></a>
+<a id="@Specification_1_cancel_offer"></a>
 
 ### Function `cancel_offer`
 

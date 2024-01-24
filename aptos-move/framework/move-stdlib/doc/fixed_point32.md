@@ -1,5 +1,5 @@
 
-<a name="0x1_fixed_point32"></a>
+<a id="0x1_fixed_point32"></a>
 
 # Module `0x1::fixed_point32`
 
@@ -22,6 +22,7 @@ a 32-bit fractional part.
 -  [Function `ceil`](#0x1_fixed_point32_ceil)
 -  [Function `round`](#0x1_fixed_point32_round)
 -  [Specification](#@Specification_1)
+    -  [Module-level Specification](#@Module-level_Specification_2)
     -  [Function `multiply_u64`](#@Specification_1_multiply_u64)
     -  [Function `divide_u64`](#@Specification_1_divide_u64)
     -  [Function `create_from_rational`](#@Specification_1_create_from_rational)
@@ -38,7 +39,7 @@ a 32-bit fractional part.
 
 
 
-<a name="0x1_fixed_point32_FixedPoint32"></a>
+<a id="0x1_fixed_point32_FixedPoint32"></a>
 
 ## Struct `FixedPoint32`
 
@@ -74,12 +75,12 @@ decimal.
 
 </details>
 
-<a name="@Constants_0"></a>
+<a id="@Constants_0"></a>
 
 ## Constants
 
 
-<a name="0x1_fixed_point32_MAX_U64"></a>
+<a id="0x1_fixed_point32_MAX_U64"></a>
 
 
 
@@ -88,7 +89,7 @@ decimal.
 
 
 
-<a name="0x1_fixed_point32_EDENOMINATOR"></a>
+<a id="0x1_fixed_point32_EDENOMINATOR"></a>
 
 The denominator provided was zero
 
@@ -98,7 +99,7 @@ The denominator provided was zero
 
 
 
-<a name="0x1_fixed_point32_EDIVISION"></a>
+<a id="0x1_fixed_point32_EDIVISION"></a>
 
 The quotient value would be too large to be held in a <code>u64</code>
 
@@ -108,7 +109,7 @@ The quotient value would be too large to be held in a <code>u64</code>
 
 
 
-<a name="0x1_fixed_point32_EDIVISION_BY_ZERO"></a>
+<a id="0x1_fixed_point32_EDIVISION_BY_ZERO"></a>
 
 A division by zero was encountered
 
@@ -118,7 +119,7 @@ A division by zero was encountered
 
 
 
-<a name="0x1_fixed_point32_EMULTIPLICATION"></a>
+<a id="0x1_fixed_point32_EMULTIPLICATION"></a>
 
 The multiplied value would be too large to be held in a <code>u64</code>
 
@@ -128,7 +129,7 @@ The multiplied value would be too large to be held in a <code>u64</code>
 
 
 
-<a name="0x1_fixed_point32_ERATIO_OUT_OF_RANGE"></a>
+<a id="0x1_fixed_point32_ERATIO_OUT_OF_RANGE"></a>
 
 The computed ratio when converting to a <code><a href="fixed_point32.md#0x1_fixed_point32_FixedPoint32">FixedPoint32</a></code> would be unrepresentable
 
@@ -138,7 +139,7 @@ The computed ratio when converting to a <code><a href="fixed_point32.md#0x1_fixe
 
 
 
-<a name="0x1_fixed_point32_multiply_u64"></a>
+<a id="0x1_fixed_point32_multiply_u64"></a>
 
 ## Function `multiply_u64`
 
@@ -174,7 +175,7 @@ overflows.
 
 </details>
 
-<a name="0x1_fixed_point32_divide_u64"></a>
+<a id="0x1_fixed_point32_divide_u64"></a>
 
 ## Function `divide_u64`
 
@@ -211,7 +212,7 @@ is zero or if the quotient overflows.
 
 </details>
 
-<a name="0x1_fixed_point32_create_from_rational"></a>
+<a id="0x1_fixed_point32_create_from_rational"></a>
 
 ## Function `create_from_rational`
 
@@ -257,7 +258,7 @@ rounding, e.g., 0.0125 will round down to 0.012 instead of up to 0.013.
 
 </details>
 
-<a name="0x1_fixed_point32_create_from_raw_value"></a>
+<a id="0x1_fixed_point32_create_from_raw_value"></a>
 
 ## Function `create_from_raw_value`
 
@@ -282,7 +283,7 @@ Create a fixedpoint value from a raw value.
 
 </details>
 
-<a name="0x1_fixed_point32_get_raw_value"></a>
+<a id="0x1_fixed_point32_get_raw_value"></a>
 
 ## Function `get_raw_value`
 
@@ -309,7 +310,7 @@ values directly.
 
 </details>
 
-<a name="0x1_fixed_point32_is_zero"></a>
+<a id="0x1_fixed_point32_is_zero"></a>
 
 ## Function `is_zero`
 
@@ -334,7 +335,7 @@ Returns true if the ratio is zero.
 
 </details>
 
-<a name="0x1_fixed_point32_min"></a>
+<a id="0x1_fixed_point32_min"></a>
 
 ## Function `min`
 
@@ -363,7 +364,7 @@ Returns the smaller of the two FixedPoint32 numbers.
 
 </details>
 
-<a name="0x1_fixed_point32_max"></a>
+<a id="0x1_fixed_point32_max"></a>
 
 ## Function `max`
 
@@ -392,7 +393,7 @@ Returns the larger of the two FixedPoint32 numbers.
 
 </details>
 
-<a name="0x1_fixed_point32_create_from_u64"></a>
+<a id="0x1_fixed_point32_create_from_u64"></a>
 
 ## Function `create_from_u64`
 
@@ -419,7 +420,7 @@ Create a fixedpoint value from a u64 value.
 
 </details>
 
-<a name="0x1_fixed_point32_floor"></a>
+<a id="0x1_fixed_point32_floor"></a>
 
 ## Function `floor`
 
@@ -444,7 +445,7 @@ Returns the largest integer less than or equal to a given number.
 
 </details>
 
-<a name="0x1_fixed_point32_ceil"></a>
+<a id="0x1_fixed_point32_ceil"></a>
 
 ## Function `ceil`
 
@@ -474,7 +475,7 @@ Rounds up the given FixedPoint32 to the next largest integer.
 
 </details>
 
-<a name="0x1_fixed_point32_round"></a>
+<a id="0x1_fixed_point32_round"></a>
 
 ## Function `round`
 
@@ -505,9 +506,14 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 </details>
 
-<a name="@Specification_1"></a>
+<a id="@Specification_1"></a>
 
 ## Specification
+
+
+<a id="@Module-level_Specification_2"></a>
+
+### Module-level Specification
 
 
 
@@ -517,7 +523,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="@Specification_1_multiply_u64"></a>
+<a id="@Specification_1_multiply_u64"></a>
 
 ### Function `multiply_u64`
 
@@ -536,7 +542,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="0x1_fixed_point32_MultiplyAbortsIf"></a>
+<a id="0x1_fixed_point32_MultiplyAbortsIf"></a>
 
 
 <pre><code><b>schema</b> <a href="fixed_point32.md#0x1_fixed_point32_MultiplyAbortsIf">MultiplyAbortsIf</a> {
@@ -549,7 +555,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="0x1_fixed_point32_spec_multiply_u64"></a>
+<a id="0x1_fixed_point32_spec_multiply_u64"></a>
 
 
 <pre><code><b>fun</b> <a href="fixed_point32.md#0x1_fixed_point32_spec_multiply_u64">spec_multiply_u64</a>(val: num, multiplier: <a href="fixed_point32.md#0x1_fixed_point32_FixedPoint32">FixedPoint32</a>): num {
@@ -559,7 +565,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="@Specification_1_divide_u64"></a>
+<a id="@Specification_1_divide_u64"></a>
 
 ### Function `divide_u64`
 
@@ -578,7 +584,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="0x1_fixed_point32_DivideAbortsIf"></a>
+<a id="0x1_fixed_point32_DivideAbortsIf"></a>
 
 
 <pre><code><b>schema</b> <a href="fixed_point32.md#0x1_fixed_point32_DivideAbortsIf">DivideAbortsIf</a> {
@@ -592,7 +598,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="0x1_fixed_point32_spec_divide_u64"></a>
+<a id="0x1_fixed_point32_spec_divide_u64"></a>
 
 
 <pre><code><b>fun</b> <a href="fixed_point32.md#0x1_fixed_point32_spec_divide_u64">spec_divide_u64</a>(val: num, divisor: <a href="fixed_point32.md#0x1_fixed_point32_FixedPoint32">FixedPoint32</a>): num {
@@ -602,7 +608,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="@Specification_1_create_from_rational"></a>
+<a id="@Specification_1_create_from_rational"></a>
 
 ### Function `create_from_rational`
 
@@ -621,7 +627,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="0x1_fixed_point32_CreateFromRationalAbortsIf"></a>
+<a id="0x1_fixed_point32_CreateFromRationalAbortsIf"></a>
 
 
 <pre><code><b>schema</b> <a href="fixed_point32.md#0x1_fixed_point32_CreateFromRationalAbortsIf">CreateFromRationalAbortsIf</a> {
@@ -639,7 +645,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="0x1_fixed_point32_spec_create_from_rational"></a>
+<a id="0x1_fixed_point32_spec_create_from_rational"></a>
 
 
 <pre><code><b>fun</b> <a href="fixed_point32.md#0x1_fixed_point32_spec_create_from_rational">spec_create_from_rational</a>(numerator: num, denominator: num): <a href="fixed_point32.md#0x1_fixed_point32_FixedPoint32">FixedPoint32</a> {
@@ -649,7 +655,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="@Specification_1_create_from_raw_value"></a>
+<a id="@Specification_1_create_from_raw_value"></a>
 
 ### Function `create_from_raw_value`
 
@@ -667,7 +673,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="@Specification_1_min"></a>
+<a id="@Specification_1_min"></a>
 
 ### Function `min`
 
@@ -686,7 +692,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="0x1_fixed_point32_spec_min"></a>
+<a id="0x1_fixed_point32_spec_min"></a>
 
 
 <pre><code><b>fun</b> <a href="fixed_point32.md#0x1_fixed_point32_spec_min">spec_min</a>(num1: <a href="fixed_point32.md#0x1_fixed_point32_FixedPoint32">FixedPoint32</a>, num2: <a href="fixed_point32.md#0x1_fixed_point32_FixedPoint32">FixedPoint32</a>): <a href="fixed_point32.md#0x1_fixed_point32_FixedPoint32">FixedPoint32</a> {
@@ -700,7 +706,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="@Specification_1_max"></a>
+<a id="@Specification_1_max"></a>
 
 ### Function `max`
 
@@ -719,7 +725,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="0x1_fixed_point32_spec_max"></a>
+<a id="0x1_fixed_point32_spec_max"></a>
 
 
 <pre><code><b>fun</b> <a href="fixed_point32.md#0x1_fixed_point32_spec_max">spec_max</a>(num1: <a href="fixed_point32.md#0x1_fixed_point32_FixedPoint32">FixedPoint32</a>, num2: <a href="fixed_point32.md#0x1_fixed_point32_FixedPoint32">FixedPoint32</a>): <a href="fixed_point32.md#0x1_fixed_point32_FixedPoint32">FixedPoint32</a> {
@@ -733,7 +739,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="@Specification_1_create_from_u64"></a>
+<a id="@Specification_1_create_from_u64"></a>
 
 ### Function `create_from_u64`
 
@@ -752,7 +758,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="0x1_fixed_point32_CreateFromU64AbortsIf"></a>
+<a id="0x1_fixed_point32_CreateFromU64AbortsIf"></a>
 
 
 <pre><code><b>schema</b> <a href="fixed_point32.md#0x1_fixed_point32_CreateFromU64AbortsIf">CreateFromU64AbortsIf</a> {
@@ -765,7 +771,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="0x1_fixed_point32_spec_create_from_u64"></a>
+<a id="0x1_fixed_point32_spec_create_from_u64"></a>
 
 
 <pre><code><b>fun</b> <a href="fixed_point32.md#0x1_fixed_point32_spec_create_from_u64">spec_create_from_u64</a>(val: num): <a href="fixed_point32.md#0x1_fixed_point32_FixedPoint32">FixedPoint32</a> {
@@ -775,7 +781,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="@Specification_1_floor"></a>
+<a id="@Specification_1_floor"></a>
 
 ### Function `floor`
 
@@ -794,7 +800,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="0x1_fixed_point32_spec_floor"></a>
+<a id="0x1_fixed_point32_spec_floor"></a>
 
 
 <pre><code><b>fun</b> <a href="fixed_point32.md#0x1_fixed_point32_spec_floor">spec_floor</a>(val: <a href="fixed_point32.md#0x1_fixed_point32_FixedPoint32">FixedPoint32</a>): u64 {
@@ -809,7 +815,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="@Specification_1_ceil"></a>
+<a id="@Specification_1_ceil"></a>
 
 ### Function `ceil`
 
@@ -829,7 +835,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="0x1_fixed_point32_spec_ceil"></a>
+<a id="0x1_fixed_point32_spec_ceil"></a>
 
 
 <pre><code><b>fun</b> <a href="fixed_point32.md#0x1_fixed_point32_spec_ceil">spec_ceil</a>(val: <a href="fixed_point32.md#0x1_fixed_point32_FixedPoint32">FixedPoint32</a>): u64 {
@@ -845,7 +851,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="@Specification_1_round"></a>
+<a id="@Specification_1_round"></a>
 
 ### Function `round`
 
@@ -865,7 +871,7 @@ Returns the value of a FixedPoint32 to the nearest integer.
 
 
 
-<a name="0x1_fixed_point32_spec_round"></a>
+<a id="0x1_fixed_point32_spec_round"></a>
 
 
 <pre><code><b>fun</b> <a href="fixed_point32.md#0x1_fixed_point32_spec_round">spec_round</a>(val: <a href="fixed_point32.md#0x1_fixed_point32_FixedPoint32">FixedPoint32</a>): u64 {

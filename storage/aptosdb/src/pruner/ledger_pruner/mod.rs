@@ -10,6 +10,7 @@ mod transaction_pruner;
 mod write_set_pruner;
 
 use crate::{
+    event_store::EventStore,
     ledger_db::LedgerDb,
     metrics::PRUNER_VERSIONS,
     pruner::{
@@ -22,11 +23,13 @@ use crate::{
             write_set_pruner::WriteSetPruner,
         },
     },
-    EventStore, TransactionStore,
+    transaction_store::TransactionStore,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use aptos_experimental_runtimes::thread_manager::THREAD_MANAGER;
 use aptos_logger::info;
 use aptos_types::transaction::{AtomicVersion, Version};
+use rayon::prelude::*;
 use std::{
     cmp::min,
     sync::{atomic::Ordering, Arc},
@@ -67,10 +70,13 @@ impl DBPruner for LedgerPruner {
             self.ledger_metadata_pruner
                 .prune(progress, current_batch_target_version)?;
 
-            // NOTE: If necessary, this can be done in parallel.
-            self.sub_pruners
-                .iter()
-                .try_for_each(|pruner| pruner.prune(progress, current_batch_target_version))?;
+            THREAD_MANAGER.get_background_pool().install(|| {
+                self.sub_pruners.par_iter().try_for_each(|sub_pruner| {
+                    sub_pruner
+                        .prune(progress, current_batch_target_version)
+                        .map_err(|err| anyhow!("{} failed to prune: {err}", sub_pruner.name()))
+                })
+            })?;
 
             progress = current_batch_target_version;
             self.record_progress(progress);

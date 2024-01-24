@@ -1,28 +1,58 @@
 ---
 remote_endpoint: ~
-name: "v1.8"
+name: "v1.9"
 proposals:
-  - name: step_1_upgrade_framework
+  - name: step_1_update_gas
     metadata:
-      title: "Multi-step proposal to upgrade mainnet framework to v1.8"
-      description: "This includes changes in https://github.com/aptos-labs/aptos-core/commits/aptos-release-v1.8"
+      title: "Update gas schedule (for AIP-58)"
+      description: "AIP-58 - Gas Schedule Adjustments"
+      discussion_url: "https://github.com/aptos-foundation/AIPs/issues/286"
     execution_mode: MultiStep
     update_sequence:
       - DefaultGas
+  - name: step_2_update_block_limits
+    metadata: 
+      title: "AIP-57: Block Output Size Limit and Conflict-Aware Block Gas Limit"  
+      description: "AIP-57: Block Output Size Limit and Conflict-Aware Block Gas Limit"  
+      discussion_url: "https://github.com/aptos-foundation/AIPs/issues/285" 
+    execution_mode: MultiStep 
+    update_sequence:  
+      - Execution:  
+          V4:  
+            transaction_shuffler_type:  
+              sender_aware_v2: 32  
+            block_gas_limit_type: 
+              complex_limit_v1:  
+                effective_block_gas_limit: 20000  
+                execution_gas_effective_multiplier: 1  
+                io_gas_effective_multiplier: 1  
+                conflict_penalty_window: 6  
+                use_granular_resource_group_conflicts: false  
+                use_module_publishing_block_conflict: false  
+                block_output_limit: 3145728
+                include_user_txn_size_in_block_output: true  
+                add_block_limit_outcome_onchain: false  
+            transaction_deduper_type: txn_hash_and_authenticator_v1
+  - name: step_3_upgrade_framework
+    metadata:
+      title: "Multi-step proposal to upgrade mainnet framework to v1.9"
+      description: "This includes changes in https://github.com/aptos-labs/aptos-core/commits/aptos-release-v1.9"
+    execution_mode: MultiStep
+    update_sequence:
       - Framework:
           bytecode_version: 6
           git_hash: ~
-  - name: step_2_add_secp256k1_support_and_introduce_single_sender_authenticator
+  - name: step_4_commission_change_delegation_pool
     metadata:
-      title: "AIP-49: secp256k1 ECDSA for Transaction Authentication, and AIP-55: Generalize Transaction Authentication and Support Arbitrary K-of-N MultiKey Accounts"
-      description: "AIP-49: secp256k1 ECDSA for Transaction Authentication (Discussion URL: https://github.com/aptos-foundation/AIPs/issues/247), and AIP-55: Generalize Transaction Authentication and Support Arbitrary K-of-N MultiKey Accounts (Discussion URL: https://github.com/aptos-foundation/AIPs/issues/267)."
-      discussion_url: "https://github.com/aptos-foundation/AIPs/issues/247"
+      title: "AIP-50: Change commission rates in delegation pools"
+      description: "AIP-50: This allows delegation pool owners to change operator commission rates after delegation pool creation."
+      discussion_url: "https://github.com/aptos-foundation/AIPs/issues/249"
     execution_mode: MultiStep
     update_sequence:
       - FeatureFlag:
           enabled:
-            - single_sender_authenticator
-  - name: step_3_enable_automatic_sponsored_account_creation
+            - commission_change_delegation_pool
+  - name: step_5_enable_automatic_sponsored_account_creation
     metadata:
       title: "AIP-52: Automated Account Creation for Sponsored Transactions"
       description: "AIP-52: Automated Account Creation for Sponsored Transactions."
@@ -32,23 +62,3 @@ proposals:
       - FeatureFlag:
           enabled:
             - sponsored_automatic_account_creation
-  - name: step_4_allow_optional_fee_payer
-    metadata:
-      title: "AIP-53: Make Fee Payer Address Optional in Transactions Authenticator"
-      description: "AIP-53: Make Fee Payer Address Optional in Transactions Authenticator."
-      discussion_url: "https://github.com/aptos-foundation/AIPs/issues/257"
-    execution_mode: MultiStep
-    update_sequence:
-      - FeatureFlag:
-          enabled:
-            - fee_payer_account_optional
-  - name: step_5_reduce_ident_size_max
-    metadata:
-      title: "Reduce the maximum identifier size"
-      description: "This reduces the maximum identifier size for (de)serializer of Move binary format"
-      discussion_url: "https://github.com/aptos-labs/aptos-core/pull/10502"
-    execution_mode: MultiStep
-    update_sequence:
-      - FeatureFlag:
-          enabled:
-            - limit_max_identifier_length

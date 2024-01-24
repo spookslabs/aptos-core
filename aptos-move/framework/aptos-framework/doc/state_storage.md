@@ -1,5 +1,5 @@
 
-<a name="0x1_state_storage"></a>
+<a id="0x1_state_storage"></a>
 
 # Module `0x1::state_storage`
 
@@ -15,6 +15,7 @@
 -  [Function `get_state_storage_usage_only_at_epoch_beginning`](#0x1_state_storage_get_state_storage_usage_only_at_epoch_beginning)
 -  [Function `on_reconfig`](#0x1_state_storage_on_reconfig)
 -  [Specification](#@Specification_1)
+    -  [Module-level Specification](#@Module-level_Specification_2)
     -  [Function `initialize`](#@Specification_1_initialize)
     -  [Function `on_new_block`](#@Specification_1_on_new_block)
     -  [Function `current_items_and_bytes`](#@Specification_1_current_items_and_bytes)
@@ -28,7 +29,7 @@
 
 
 
-<a name="0x1_state_storage_Usage"></a>
+<a id="0x1_state_storage_Usage"></a>
 
 ## Struct `Usage`
 
@@ -61,11 +62,11 @@
 
 </details>
 
-<a name="0x1_state_storage_StateStorageUsage"></a>
+<a id="0x1_state_storage_StateStorageUsage"></a>
 
 ## Resource `StateStorageUsage`
 
-This is updated at the begining of each opoch, reflecting the storage
+This is updated at the beginning of each opoch, reflecting the storage
 usage after the last txn of the previous epoch is committed.
 
 
@@ -96,7 +97,7 @@ usage after the last txn of the previous epoch is committed.
 
 </details>
 
-<a name="0x1_state_storage_GasParameter"></a>
+<a id="0x1_state_storage_GasParameter"></a>
 
 ## Resource `GasParameter`
 
@@ -123,12 +124,12 @@ usage after the last txn of the previous epoch is committed.
 
 </details>
 
-<a name="@Constants_0"></a>
+<a id="@Constants_0"></a>
 
 ## Constants
 
 
-<a name="0x1_state_storage_ESTATE_STORAGE_USAGE"></a>
+<a id="0x1_state_storage_ESTATE_STORAGE_USAGE"></a>
 
 
 
@@ -137,7 +138,7 @@ usage after the last txn of the previous epoch is committed.
 
 
 
-<a name="0x1_state_storage_initialize"></a>
+<a id="0x1_state_storage_initialize"></a>
 
 ## Function `initialize`
 
@@ -172,7 +173,7 @@ usage after the last txn of the previous epoch is committed.
 
 </details>
 
-<a name="0x1_state_storage_on_new_block"></a>
+<a id="0x1_state_storage_on_new_block"></a>
 
 ## Function `on_new_block`
 
@@ -204,7 +205,7 @@ usage after the last txn of the previous epoch is committed.
 
 </details>
 
-<a name="0x1_state_storage_current_items_and_bytes"></a>
+<a id="0x1_state_storage_current_items_and_bytes"></a>
 
 ## Function `current_items_and_bytes`
 
@@ -233,7 +234,7 @@ usage after the last txn of the previous epoch is committed.
 
 </details>
 
-<a name="0x1_state_storage_get_state_storage_usage_only_at_epoch_beginning"></a>
+<a id="0x1_state_storage_get_state_storage_usage_only_at_epoch_beginning"></a>
 
 ## Function `get_state_storage_usage_only_at_epoch_beginning`
 
@@ -259,7 +260,7 @@ guarantees a fresh state view then.
 
 </details>
 
-<a name="0x1_state_storage_on_reconfig"></a>
+<a id="0x1_state_storage_on_reconfig"></a>
 
 ## Function `on_reconfig`
 
@@ -283,9 +284,14 @@ guarantees a fresh state view then.
 
 </details>
 
-<a name="@Specification_1"></a>
+<a id="@Specification_1"></a>
 
 ## Specification
+
+
+<a id="@Module-level_Specification_2"></a>
+
+### Module-level Specification
 
 
 
@@ -297,7 +303,7 @@ guarantees a fresh state view then.
 
 
 
-<a name="@Specification_1_initialize"></a>
+<a id="@Specification_1_initialize"></a>
 
 ### Function `initialize`
 
@@ -320,7 +326,7 @@ aborts if StateStorageUsage already exists.
 
 
 
-<a name="@Specification_1_on_new_block"></a>
+<a id="@Specification_1_on_new_block"></a>
 
 ### Function `on_new_block`
 
@@ -338,7 +344,7 @@ aborts if StateStorageUsage already exists.
 
 
 
-<a name="@Specification_1_current_items_and_bytes"></a>
+<a id="@Specification_1_current_items_and_bytes"></a>
 
 ### Function `current_items_and_bytes`
 
@@ -354,7 +360,7 @@ aborts if StateStorageUsage already exists.
 
 
 
-<a name="@Specification_1_get_state_storage_usage_only_at_epoch_beginning"></a>
+<a id="@Specification_1_get_state_storage_usage_only_at_epoch_beginning"></a>
 
 ### Function `get_state_storage_usage_only_at_epoch_beginning`
 
@@ -370,7 +376,7 @@ aborts if StateStorageUsage already exists.
 
 
 
-<a name="@Specification_1_on_reconfig"></a>
+<a id="@Specification_1_on_reconfig"></a>
 
 ### Function `on_reconfig`
 

@@ -1,5 +1,5 @@
 
-<a name="0x1_transaction_validation"></a>
+<a id="0x1_transaction_validation"></a>
 
 # Module `0x1::transaction_validation`
 
@@ -17,6 +17,7 @@
 -  [Function `epilogue`](#0x1_transaction_validation_epilogue)
 -  [Function `epilogue_gas_payer`](#0x1_transaction_validation_epilogue_gas_payer)
 -  [Specification](#@Specification_1)
+    -  [Module-level Specification](#@Module-level_Specification_2)
     -  [Function `initialize`](#@Specification_1_initialize)
     -  [Function `prologue_common`](#@Specification_1_prologue_common)
     -  [Function `module_prologue`](#@Specification_1_module_prologue)
@@ -43,7 +44,7 @@
 
 
 
-<a name="0x1_transaction_validation_TransactionValidation"></a>
+<a id="0x1_transaction_validation_TransactionValidation"></a>
 
 ## Resource `TransactionValidation`
 
@@ -102,12 +103,12 @@ correct chain-specific prologue and epilogue functions
 
 </details>
 
-<a name="@Constants_0"></a>
+<a id="@Constants_0"></a>
 
 ## Constants
 
 
-<a name="0x1_transaction_validation_MAX_U64"></a>
+<a id="0x1_transaction_validation_MAX_U64"></a>
 
 MSB is used to indicate a gas payer tx
 
@@ -117,7 +118,7 @@ MSB is used to indicate a gas payer tx
 
 
 
-<a name="0x1_transaction_validation_EOUT_OF_GAS"></a>
+<a id="0x1_transaction_validation_EOUT_OF_GAS"></a>
 
 Transaction exceeded its allocated max gas
 
@@ -127,7 +128,7 @@ Transaction exceeded its allocated max gas
 
 
 
-<a name="0x1_transaction_validation_PROLOGUE_EACCOUNT_DOES_NOT_EXIST"></a>
+<a id="0x1_transaction_validation_PROLOGUE_EACCOUNT_DOES_NOT_EXIST"></a>
 
 
 
@@ -136,7 +137,7 @@ Transaction exceeded its allocated max gas
 
 
 
-<a name="0x1_transaction_validation_PROLOGUE_EBAD_CHAIN_ID"></a>
+<a id="0x1_transaction_validation_PROLOGUE_EBAD_CHAIN_ID"></a>
 
 
 
@@ -145,7 +146,7 @@ Transaction exceeded its allocated max gas
 
 
 
-<a name="0x1_transaction_validation_PROLOGUE_ECANT_PAY_GAS_DEPOSIT"></a>
+<a id="0x1_transaction_validation_PROLOGUE_ECANT_PAY_GAS_DEPOSIT"></a>
 
 
 
@@ -154,7 +155,7 @@ Transaction exceeded its allocated max gas
 
 
 
-<a name="0x1_transaction_validation_PROLOGUE_EFEE_PAYER_NOT_ENABLED"></a>
+<a id="0x1_transaction_validation_PROLOGUE_EFEE_PAYER_NOT_ENABLED"></a>
 
 
 
@@ -163,7 +164,7 @@ Transaction exceeded its allocated max gas
 
 
 
-<a name="0x1_transaction_validation_PROLOGUE_EINVALID_ACCOUNT_AUTH_KEY"></a>
+<a id="0x1_transaction_validation_PROLOGUE_EINVALID_ACCOUNT_AUTH_KEY"></a>
 
 Prologue errors. These are separated out from the other errors in this
 module since they are mapped separately to major VM statuses, and are
@@ -175,7 +176,7 @@ important to the semantics of the system.
 
 
 
-<a name="0x1_transaction_validation_PROLOGUE_ESECONDARY_KEYS_ADDRESSES_COUNT_MISMATCH"></a>
+<a id="0x1_transaction_validation_PROLOGUE_ESECONDARY_KEYS_ADDRESSES_COUNT_MISMATCH"></a>
 
 
 
@@ -184,7 +185,7 @@ important to the semantics of the system.
 
 
 
-<a name="0x1_transaction_validation_PROLOGUE_ESEQUENCE_NUMBER_TOO_BIG"></a>
+<a id="0x1_transaction_validation_PROLOGUE_ESEQUENCE_NUMBER_TOO_BIG"></a>
 
 
 
@@ -193,7 +194,7 @@ important to the semantics of the system.
 
 
 
-<a name="0x1_transaction_validation_PROLOGUE_ESEQUENCE_NUMBER_TOO_NEW"></a>
+<a id="0x1_transaction_validation_PROLOGUE_ESEQUENCE_NUMBER_TOO_NEW"></a>
 
 
 
@@ -202,7 +203,7 @@ important to the semantics of the system.
 
 
 
-<a name="0x1_transaction_validation_PROLOGUE_ESEQUENCE_NUMBER_TOO_OLD"></a>
+<a id="0x1_transaction_validation_PROLOGUE_ESEQUENCE_NUMBER_TOO_OLD"></a>
 
 
 
@@ -211,7 +212,7 @@ important to the semantics of the system.
 
 
 
-<a name="0x1_transaction_validation_PROLOGUE_ETRANSACTION_EXPIRED"></a>
+<a id="0x1_transaction_validation_PROLOGUE_ETRANSACTION_EXPIRED"></a>
 
 
 
@@ -220,7 +221,7 @@ important to the semantics of the system.
 
 
 
-<a name="0x1_transaction_validation_initialize"></a>
+<a id="0x1_transaction_validation_initialize"></a>
 
 ## Function `initialize`
 
@@ -260,7 +261,7 @@ Only called during genesis to initialize system resources for this module.
 
 </details>
 
-<a name="0x1_transaction_validation_prologue_common"></a>
+<a id="0x1_transaction_validation_prologue_common"></a>
 
 ## Function `prologue_common`
 
@@ -348,7 +349,7 @@ Only called during genesis to initialize system resources for this module.
 
 </details>
 
-<a name="0x1_transaction_validation_module_prologue"></a>
+<a id="0x1_transaction_validation_module_prologue"></a>
 
 ## Function `module_prologue`
 
@@ -381,7 +382,7 @@ Only called during genesis to initialize system resources for this module.
 
 </details>
 
-<a name="0x1_transaction_validation_script_prologue"></a>
+<a id="0x1_transaction_validation_script_prologue"></a>
 
 ## Function `script_prologue`
 
@@ -415,7 +416,7 @@ Only called during genesis to initialize system resources for this module.
 
 </details>
 
-<a name="0x1_transaction_validation_multi_agent_script_prologue"></a>
+<a id="0x1_transaction_validation_multi_agent_script_prologue"></a>
 
 ## Function `multi_agent_script_prologue`
 
@@ -460,7 +461,7 @@ Only called during genesis to initialize system resources for this module.
 
 </details>
 
-<a name="0x1_transaction_validation_multi_agent_common_prologue"></a>
+<a id="0x1_transaction_validation_multi_agent_common_prologue"></a>
 
 ## Function `multi_agent_common_prologue`
 
@@ -513,7 +514,7 @@ Only called during genesis to initialize system resources for this module.
 
 </details>
 
-<a name="0x1_transaction_validation_fee_payer_script_prologue"></a>
+<a id="0x1_transaction_validation_fee_payer_script_prologue"></a>
 
 ## Function `fee_payer_script_prologue`
 
@@ -564,7 +565,7 @@ Only called during genesis to initialize system resources for this module.
 
 </details>
 
-<a name="0x1_transaction_validation_epilogue"></a>
+<a id="0x1_transaction_validation_epilogue"></a>
 
 ## Function `epilogue`
 
@@ -597,7 +598,7 @@ Called by the Adapter
 
 </details>
 
-<a name="0x1_transaction_validation_epilogue_gas_payer"></a>
+<a id="0x1_transaction_validation_epilogue_gas_payer"></a>
 
 ## Function `epilogue_gas_payer`
 
@@ -670,9 +671,14 @@ Called by the Adapter
 
 </details>
 
-<a name="@Specification_1"></a>
+<a id="@Specification_1"></a>
 
 ## Specification
+
+
+<a id="@Module-level_Specification_2"></a>
+
+### Module-level Specification
 
 
 
@@ -682,7 +688,7 @@ Called by the Adapter
 
 
 
-<a name="@Specification_1_initialize"></a>
+<a id="@Specification_1_initialize"></a>
 
 ### Function `initialize`
 
@@ -706,7 +712,7 @@ Create a schema to reuse some code.
 Give some constraints that may abort according to the conditions.
 
 
-<a name="0x1_transaction_validation_PrologueCommonAbortsIf"></a>
+<a id="0x1_transaction_validation_PrologueCommonAbortsIf"></a>
 
 
 <pre><code><b>schema</b> <a href="transaction_validation.md#0x1_transaction_validation_PrologueCommonAbortsIf">PrologueCommonAbortsIf</a> {
@@ -749,7 +755,7 @@ Give some constraints that may abort according to the conditions.
 
 
 
-<a name="@Specification_1_prologue_common"></a>
+<a id="@Specification_1_prologue_common"></a>
 
 ### Function `prologue_common`
 
@@ -765,7 +771,7 @@ Give some constraints that may abort according to the conditions.
 
 
 
-<a name="@Specification_1_module_prologue"></a>
+<a id="@Specification_1_module_prologue"></a>
 
 ### Function `module_prologue`
 
@@ -784,7 +790,7 @@ Give some constraints that may abort according to the conditions.
 
 
 
-<a name="@Specification_1_script_prologue"></a>
+<a id="@Specification_1_script_prologue"></a>
 
 ### Function `script_prologue`
 
@@ -804,7 +810,7 @@ Give some constraints that may abort according to the conditions.
 
 
 
-<a name="0x1_transaction_validation_MultiAgentPrologueCommonAbortsIf"></a>
+<a id="0x1_transaction_validation_MultiAgentPrologueCommonAbortsIf"></a>
 
 
 <pre><code><b>schema</b> <a href="transaction_validation.md#0x1_transaction_validation_MultiAgentPrologueCommonAbortsIf">MultiAgentPrologueCommonAbortsIf</a> {
@@ -825,7 +831,7 @@ Give some constraints that may abort according to the conditions.
 
 
 
-<a name="@Specification_1_multi_agent_script_prologue"></a>
+<a id="@Specification_1_multi_agent_script_prologue"></a>
 
 ### Function `multi_agent_script_prologue`
 
@@ -853,7 +859,7 @@ not equal the number of singers.
 
 
 
-<a name="@Specification_1_multi_agent_common_prologue"></a>
+<a id="@Specification_1_multi_agent_common_prologue"></a>
 
 ### Function `multi_agent_common_prologue`
 
@@ -872,7 +878,7 @@ not equal the number of singers.
 
 
 
-<a name="@Specification_1_fee_payer_script_prologue"></a>
+<a id="@Specification_1_fee_payer_script_prologue"></a>
 
 ### Function `fee_payer_script_prologue`
 
@@ -902,7 +908,7 @@ not equal the number of singers.
 
 
 
-<a name="@Specification_1_epilogue"></a>
+<a id="@Specification_1_epilogue"></a>
 
 ### Function `epilogue`
 
@@ -921,7 +927,7 @@ Skip transaction_fee::burn_fee verification.
 
 
 
-<a name="@Specification_1_epilogue_gas_payer"></a>
+<a id="@Specification_1_epilogue_gas_payer"></a>
 
 ### Function `epilogue_gas_payer`
 
@@ -941,7 +947,7 @@ Skip transaction_fee::burn_fee verification.
 
 
 
-<a name="0x1_transaction_validation_EpilogueGasPayerAbortsIf"></a>
+<a id="0x1_transaction_validation_EpilogueGasPayerAbortsIf"></a>
 
 
 <pre><code><b>schema</b> <a href="transaction_validation.md#0x1_transaction_validation_EpilogueGasPayerAbortsIf">EpilogueGasPayerAbortsIf</a> {
@@ -1001,6 +1007,9 @@ Skip transaction_fee::burn_fee verification.
     <b>aborts_if</b> amount_to_mint &gt; 0 && !<b>exists</b>&lt;AptosCoinMintCapability&gt;(@aptos_framework);
     <b>aborts_if</b> amount_to_mint &gt; 0 && total_supply + amount_to_mint &gt; MAX_U128;
     <b>ensures</b> amount_to_mint &gt; 0 ==&gt; post_total_supply == total_supply + amount_to_mint;
+    <b>let</b> aptos_addr = <a href="../../aptos-stdlib/doc/type_info.md#0x1_type_info_type_of">type_info::type_of</a>&lt;AptosCoin&gt;().account_address;
+    <b>aborts_if</b> (amount_to_mint != 0) && !<b>exists</b>&lt;<a href="coin.md#0x1_coin_CoinInfo">coin::CoinInfo</a>&lt;AptosCoin&gt;&gt;(aptos_addr);
+    <b>include</b> <a href="coin.md#0x1_coin_CoinAddAbortsIf">coin::CoinAddAbortsIf</a>&lt;AptosCoin&gt; { amount: amount_to_mint };
 }
 </code></pre>
 

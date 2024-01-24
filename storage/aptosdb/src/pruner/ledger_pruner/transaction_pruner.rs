@@ -7,7 +7,7 @@ use crate::{
         db_metadata::{DbMetadataKey, DbMetadataSchema, DbMetadataValue},
         transaction::TransactionSchema,
     },
-    TransactionStore,
+    transaction_store::TransactionStore,
 };
 use anyhow::{ensure, Result};
 use aptos_logger::info;
@@ -22,6 +22,10 @@ pub struct TransactionPruner {
 }
 
 impl DBSubPruner for TransactionPruner {
+    fn name(&self) -> &str {
+        "TransactionPruner"
+    }
+
     fn prune(&self, current_progress: Version, target_version: Version) -> Result<()> {
         let batch = SchemaBatch::new();
         let candidate_transactions =

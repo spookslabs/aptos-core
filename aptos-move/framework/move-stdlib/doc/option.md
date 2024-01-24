@@ -1,5 +1,5 @@
 
-<a name="0x1_option"></a>
+<a id="0x1_option"></a>
 
 # Module `0x1::option`
 
@@ -36,7 +36,8 @@ This module defines the Option type and its methods to represent and handle an o
 -  [Function `any`](#0x1_option_any)
 -  [Function `destroy`](#0x1_option_destroy)
 -  [Specification](#@Specification_1)
-    -  [Helper Schema](#@Helper_Schema_2)
+    -  [Module-level Specification](#@Module-level_Specification_2)
+    -  [Helper Schema](#@Helper_Schema_3)
     -  [Struct `Option`](#@Specification_1_Option)
     -  [Function `none`](#@Specification_1_none)
     -  [Function `some`](#@Specification_1_some)
@@ -63,7 +64,7 @@ This module defines the Option type and its methods to represent and handle an o
 
 
 
-<a name="0x1_option_Option"></a>
+<a id="0x1_option_Option"></a>
 
 ## Struct `Option`
 
@@ -92,12 +93,12 @@ zero or one because Move bytecode does not have ADTs.
 
 </details>
 
-<a name="@Constants_0"></a>
+<a id="@Constants_0"></a>
 
 ## Constants
 
 
-<a name="0x1_option_EOPTION_IS_SET"></a>
+<a id="0x1_option_EOPTION_IS_SET"></a>
 
 The <code><a href="option.md#0x1_option_Option">Option</a></code> is in an invalid state for the operation attempted.
 The <code><a href="option.md#0x1_option_Option">Option</a></code> is <code>Some</code> while it should be <code>None</code>.
@@ -108,7 +109,7 @@ The <code><a href="option.md#0x1_option_Option">Option</a></code> is <code>Some<
 
 
 
-<a name="0x1_option_EOPTION_NOT_SET"></a>
+<a id="0x1_option_EOPTION_NOT_SET"></a>
 
 The <code><a href="option.md#0x1_option_Option">Option</a></code> is in an invalid state for the operation attempted.
 The <code><a href="option.md#0x1_option_Option">Option</a></code> is <code>None</code> while it should be <code>Some</code>.
@@ -119,7 +120,7 @@ The <code><a href="option.md#0x1_option_Option">Option</a></code> is <code>None<
 
 
 
-<a name="0x1_option_EOPTION_VEC_TOO_LONG"></a>
+<a id="0x1_option_EOPTION_VEC_TOO_LONG"></a>
 
 Cannot construct an option from a vector with 2 or more elements.
 
@@ -129,7 +130,7 @@ Cannot construct an option from a vector with 2 or more elements.
 
 
 
-<a name="0x1_option_none"></a>
+<a id="0x1_option_none"></a>
 
 ## Function `none`
 
@@ -154,7 +155,7 @@ Return an empty <code><a href="option.md#0x1_option_Option">Option</a></code>
 
 </details>
 
-<a name="0x1_option_some"></a>
+<a id="0x1_option_some"></a>
 
 ## Function `some`
 
@@ -179,7 +180,7 @@ Return an <code><a href="option.md#0x1_option_Option">Option</a></code> containi
 
 </details>
 
-<a name="0x1_option_from_vec"></a>
+<a id="0x1_option_from_vec"></a>
 
 ## Function `from_vec`
 
@@ -204,7 +205,7 @@ Return an <code><a href="option.md#0x1_option_Option">Option</a></code> containi
 
 </details>
 
-<a name="0x1_option_is_none"></a>
+<a id="0x1_option_is_none"></a>
 
 ## Function `is_none`
 
@@ -229,7 +230,7 @@ Return true if <code>t</code> does not hold a value
 
 </details>
 
-<a name="0x1_option_is_some"></a>
+<a id="0x1_option_is_some"></a>
 
 ## Function `is_some`
 
@@ -254,7 +255,7 @@ Return true if <code>t</code> holds a value
 
 </details>
 
-<a name="0x1_option_contains"></a>
+<a id="0x1_option_contains"></a>
 
 ## Function `contains`
 
@@ -280,7 +281,7 @@ Always returns <code><b>false</b></code> if <code>t</code> does not hold a value
 
 </details>
 
-<a name="0x1_option_borrow"></a>
+<a id="0x1_option_borrow"></a>
 
 ## Function `borrow`
 
@@ -307,7 +308,7 @@ Aborts if <code>t</code> does not hold a value
 
 </details>
 
-<a name="0x1_option_borrow_with_default"></a>
+<a id="0x1_option_borrow_with_default"></a>
 
 ## Function `borrow_with_default`
 
@@ -335,7 +336,7 @@ Return <code>default_ref</code> if <code>t</code> does not hold a value
 
 </details>
 
-<a name="0x1_option_get_with_default"></a>
+<a id="0x1_option_get_with_default"></a>
 
 ## Function `get_with_default`
 
@@ -366,7 +367,7 @@ Return <code>default</code> if <code>t</code> does not hold a value
 
 </details>
 
-<a name="0x1_option_fill"></a>
+<a id="0x1_option_fill"></a>
 
 ## Function `fill`
 
@@ -394,7 +395,7 @@ Aborts if <code>t</code> already holds a value
 
 </details>
 
-<a name="0x1_option_extract"></a>
+<a id="0x1_option_extract"></a>
 
 ## Function `extract`
 
@@ -421,7 +422,7 @@ Aborts if <code>t</code> does not hold a value
 
 </details>
 
-<a name="0x1_option_borrow_mut"></a>
+<a id="0x1_option_borrow_mut"></a>
 
 ## Function `borrow_mut`
 
@@ -448,7 +449,7 @@ Aborts if <code>t</code> does not hold a value
 
 </details>
 
-<a name="0x1_option_swap"></a>
+<a id="0x1_option_swap"></a>
 
 ## Function `swap`
 
@@ -478,7 +479,7 @@ Aborts if <code>t</code> does not hold a value
 
 </details>
 
-<a name="0x1_option_swap_or_fill"></a>
+<a id="0x1_option_swap_or_fill"></a>
 
 ## Function `swap_or_fill`
 
@@ -509,7 +510,7 @@ Different from swap(), swap_or_fill() allows for <code>t</code> not holding a va
 
 </details>
 
-<a name="0x1_option_destroy_with_default"></a>
+<a id="0x1_option_destroy_with_default"></a>
 
 ## Function `destroy_with_default`
 
@@ -536,7 +537,7 @@ Destroys <code>t.</code> If <code>t</code> holds a value, return it. Returns <co
 
 </details>
 
-<a name="0x1_option_destroy_some"></a>
+<a id="0x1_option_destroy_some"></a>
 
 ## Function `destroy_some`
 
@@ -566,7 +567,7 @@ Aborts if <code>t</code> does not hold a value
 
 </details>
 
-<a name="0x1_option_destroy_none"></a>
+<a id="0x1_option_destroy_none"></a>
 
 ## Function `destroy_none`
 
@@ -594,7 +595,7 @@ Aborts if <code>t</code> holds a value
 
 </details>
 
-<a name="0x1_option_to_vec"></a>
+<a id="0x1_option_to_vec"></a>
 
 ## Function `to_vec`
 
@@ -621,7 +622,7 @@ and an empty vector otherwise
 
 </details>
 
-<a name="0x1_option_for_each"></a>
+<a id="0x1_option_for_each"></a>
 
 ## Function `for_each`
 
@@ -650,7 +651,7 @@ Apply the function to the optional element, consuming it. Does nothing if no val
 
 </details>
 
-<a name="0x1_option_for_each_ref"></a>
+<a id="0x1_option_for_each_ref"></a>
 
 ## Function `for_each_ref`
 
@@ -677,7 +678,7 @@ Apply the function to the optional element reference. Does nothing if no value p
 
 </details>
 
-<a name="0x1_option_for_each_mut"></a>
+<a id="0x1_option_for_each_mut"></a>
 
 ## Function `for_each_mut`
 
@@ -704,7 +705,7 @@ Apply the function to the optional element reference. Does nothing if no value p
 
 </details>
 
-<a name="0x1_option_fold"></a>
+<a id="0x1_option_fold"></a>
 
 ## Function `fold`
 
@@ -738,7 +739,7 @@ Folds the function over the optional element.
 
 </details>
 
-<a name="0x1_option_map"></a>
+<a id="0x1_option_map"></a>
 
 ## Function `map`
 
@@ -768,7 +769,7 @@ Maps the content of an option.
 
 </details>
 
-<a name="0x1_option_map_ref"></a>
+<a id="0x1_option_map_ref"></a>
 
 ## Function `map_ref`
 
@@ -798,7 +799,7 @@ Maps the content of an option without destroying the original option.
 
 </details>
 
-<a name="0x1_option_filter"></a>
+<a id="0x1_option_filter"></a>
 
 ## Function `filter`
 
@@ -827,7 +828,7 @@ Filters the content of an option
 
 </details>
 
-<a name="0x1_option_any"></a>
+<a id="0x1_option_any"></a>
 
 ## Function `any`
 
@@ -852,7 +853,7 @@ Returns true if the option contains an element which satisfies predicate.
 
 </details>
 
-<a name="0x1_option_destroy"></a>
+<a id="0x1_option_destroy"></a>
 
 ## Function `destroy`
 
@@ -878,9 +879,14 @@ Utility function to destroy an option that is not droppable.
 
 </details>
 
-<a name="@Specification_1"></a>
+<a id="@Specification_1"></a>
 
 ## Specification
+
+
+<a id="@Module-level_Specification_2"></a>
+
+### Module-level Specification
 
 
 
@@ -890,13 +896,13 @@ Utility function to destroy an option that is not droppable.
 
 
 
-<a name="@Helper_Schema_2"></a>
+<a id="@Helper_Schema_3"></a>
 
 ### Helper Schema
 
 
 
-<a name="0x1_option_AbortsIfNone"></a>
+<a id="0x1_option_AbortsIfNone"></a>
 
 
 <pre><code><b>schema</b> <a href="option.md#0x1_option_AbortsIfNone">AbortsIfNone</a>&lt;Element&gt; {
@@ -907,7 +913,7 @@ Utility function to destroy an option that is not droppable.
 
 
 
-<a name="@Specification_1_Option"></a>
+<a id="@Specification_1_Option"></a>
 
 ### Struct `Option`
 
@@ -936,7 +942,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="@Specification_1_none"></a>
+<a id="@Specification_1_none"></a>
 
 ### Function `none`
 
@@ -955,7 +961,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="0x1_option_spec_none"></a>
+<a id="0x1_option_spec_none"></a>
 
 
 <pre><code><b>fun</b> <a href="option.md#0x1_option_spec_none">spec_none</a>&lt;Element&gt;(): <a href="option.md#0x1_option_Option">Option</a>&lt;Element&gt; {
@@ -965,7 +971,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="@Specification_1_some"></a>
+<a id="@Specification_1_some"></a>
 
 ### Function `some`
 
@@ -984,7 +990,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="0x1_option_spec_some"></a>
+<a id="0x1_option_spec_some"></a>
 
 
 <pre><code><b>fun</b> <a href="option.md#0x1_option_spec_some">spec_some</a>&lt;Element&gt;(e: Element): <a href="option.md#0x1_option_Option">Option</a>&lt;Element&gt; {
@@ -994,7 +1000,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="@Specification_1_from_vec"></a>
+<a id="@Specification_1_from_vec"></a>
 
 ### Function `from_vec`
 
@@ -1010,7 +1016,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="@Specification_1_is_none"></a>
+<a id="@Specification_1_is_none"></a>
 
 ### Function `is_none`
 
@@ -1029,7 +1035,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="0x1_option_spec_is_none"></a>
+<a id="0x1_option_spec_is_none"></a>
 
 
 <pre><code><b>fun</b> <a href="option.md#0x1_option_spec_is_none">spec_is_none</a>&lt;Element&gt;(t: <a href="option.md#0x1_option_Option">Option</a>&lt;Element&gt;): bool {
@@ -1039,7 +1045,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="@Specification_1_is_some"></a>
+<a id="@Specification_1_is_some"></a>
 
 ### Function `is_some`
 
@@ -1058,7 +1064,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="0x1_option_spec_is_some"></a>
+<a id="0x1_option_spec_is_some"></a>
 
 
 <pre><code><b>fun</b> <a href="option.md#0x1_option_spec_is_some">spec_is_some</a>&lt;Element&gt;(t: <a href="option.md#0x1_option_Option">Option</a>&lt;Element&gt;): bool {
@@ -1068,7 +1074,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="@Specification_1_contains"></a>
+<a id="@Specification_1_contains"></a>
 
 ### Function `contains`
 
@@ -1087,7 +1093,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="0x1_option_spec_contains"></a>
+<a id="0x1_option_spec_contains"></a>
 
 
 <pre><code><b>fun</b> <a href="option.md#0x1_option_spec_contains">spec_contains</a>&lt;Element&gt;(t: <a href="option.md#0x1_option_Option">Option</a>&lt;Element&gt;, e: Element): bool {
@@ -1097,7 +1103,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="@Specification_1_borrow"></a>
+<a id="@Specification_1_borrow"></a>
 
 ### Function `borrow`
 
@@ -1116,7 +1122,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="0x1_option_spec_borrow"></a>
+<a id="0x1_option_spec_borrow"></a>
 
 
 <pre><code><b>fun</b> <a href="option.md#0x1_option_spec_borrow">spec_borrow</a>&lt;Element&gt;(t: <a href="option.md#0x1_option_Option">Option</a>&lt;Element&gt;): Element {
@@ -1126,7 +1132,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="@Specification_1_borrow_with_default"></a>
+<a id="@Specification_1_borrow_with_default"></a>
 
 ### Function `borrow_with_default`
 
@@ -1144,7 +1150,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="@Specification_1_get_with_default"></a>
+<a id="@Specification_1_get_with_default"></a>
 
 ### Function `get_with_default`
 
@@ -1162,7 +1168,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="@Specification_1_fill"></a>
+<a id="@Specification_1_fill"></a>
 
 ### Function `fill`
 
@@ -1181,7 +1187,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="@Specification_1_extract"></a>
+<a id="@Specification_1_extract"></a>
 
 ### Function `extract`
 
@@ -1200,7 +1206,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="@Specification_1_borrow_mut"></a>
+<a id="@Specification_1_borrow_mut"></a>
 
 ### Function `borrow_mut`
 
@@ -1218,7 +1224,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="@Specification_1_swap"></a>
+<a id="@Specification_1_swap"></a>
 
 ### Function `swap`
 
@@ -1238,7 +1244,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="@Specification_1_swap_or_fill"></a>
+<a id="@Specification_1_swap_or_fill"></a>
 
 ### Function `swap_or_fill`
 
@@ -1257,7 +1263,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="@Specification_1_destroy_with_default"></a>
+<a id="@Specification_1_destroy_with_default"></a>
 
 ### Function `destroy_with_default`
 
@@ -1275,7 +1281,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="@Specification_1_destroy_some"></a>
+<a id="@Specification_1_destroy_some"></a>
 
 ### Function `destroy_some`
 
@@ -1293,7 +1299,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="@Specification_1_destroy_none"></a>
+<a id="@Specification_1_destroy_none"></a>
 
 ### Function `destroy_none`
 
@@ -1310,7 +1316,7 @@ because it's 0 for "none" or 1 for "some".
 
 
 
-<a name="@Specification_1_to_vec"></a>
+<a id="@Specification_1_to_vec"></a>
 
 ### Function `to_vec`
 

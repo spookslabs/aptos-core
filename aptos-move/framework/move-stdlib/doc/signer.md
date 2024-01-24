@@ -1,5 +1,5 @@
 
-<a name="0x1_signer"></a>
+<a id="0x1_signer"></a>
 
 # Module `0x1::signer`
 
@@ -8,18 +8,19 @@
 -  [Function `borrow_address`](#0x1_signer_borrow_address)
 -  [Function `address_of`](#0x1_signer_address_of)
 -  [Specification](#@Specification_0)
+    -  [Module-level Specification](#@Module-level_Specification_1)
 
 
 <pre><code></code></pre>
 
 
 
-<a name="0x1_signer_borrow_address"></a>
+<a id="0x1_signer_borrow_address"></a>
 
 ## Function `borrow_address`
 
 Borrows the address of the signer
-Conceptually, you can think of the <code><a href="signer.md#0x1_signer">signer</a></code> as being a struct wrapper arround an
+Conceptually, you can think of the <code><a href="signer.md#0x1_signer">signer</a></code> as being a struct wrapper around an
 address
 ```
 struct signer has drop { addr: address }
@@ -43,7 +44,7 @@ struct signer has drop { addr: address }
 
 </details>
 
-<a name="0x1_signer_address_of"></a>
+<a id="0x1_signer_address_of"></a>
 
 ## Function `address_of`
 
@@ -67,14 +68,19 @@ struct signer has drop { addr: address }
 
 </details>
 
-<a name="@Specification_0"></a>
+<a id="@Specification_0"></a>
 
 ## Specification
+
+
+<a id="@Module-level_Specification_1"></a>
+
+### Module-level Specification
 
 Return true only if <code>s</code> is a transaction signer. This is a spec function only available in spec.
 
 
-<a name="0x1_signer_is_txn_signer"></a>
+<a id="0x1_signer_is_txn_signer"></a>
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="signer.md#0x1_signer_is_txn_signer">is_txn_signer</a>(s: <a href="signer.md#0x1_signer">signer</a>): bool;
@@ -84,7 +90,7 @@ Return true only if <code>s</code> is a transaction signer. This is a spec funct
 Return true only if <code>a</code> is a transaction signer address. This is a spec function only available in spec.
 
 
-<a name="0x1_signer_is_txn_signer_addr"></a>
+<a id="0x1_signer_is_txn_signer_addr"></a>
 
 
 <pre><code><b>native</b> <b>fun</b> <a href="signer.md#0x1_signer_is_txn_signer_addr">is_txn_signer_addr</a>(a: <b>address</b>): bool;

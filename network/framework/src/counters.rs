@@ -20,10 +20,15 @@ pub const RESPONSE_LABEL: &str = "response";
 // some state labels
 pub const CANCELED_LABEL: &str = "canceled";
 pub const DECLINED_LABEL: &str = "declined";
+pub const EXPIRED_LABEL: &str = "expired";
 pub const RECEIVED_LABEL: &str = "received";
 pub const SENT_LABEL: &str = "sent";
 pub const SUCCEEDED_LABEL: &str = "succeeded";
 pub const FAILED_LABEL: &str = "failed";
+
+// Direction labels
+pub const INBOUND_LABEL: &str = "inbound";
+pub const OUTBOUND_LABEL: &str = "outbound";
 
 // Serialization labels
 pub const SERIALIZATION_LABEL: &str = "serialization";
@@ -165,7 +170,8 @@ pub static APTOS_NETWORK_RPC_MESSAGES: Lazy<IntCounterVec> = Lazy::new(|| {
         "role_type",
         "network_id",
         "peer_id",
-        "type",
+        "message_type",
+        "message_direction",
         "state"
     ])
     .unwrap()
@@ -173,14 +179,16 @@ pub static APTOS_NETWORK_RPC_MESSAGES: Lazy<IntCounterVec> = Lazy::new(|| {
 
 pub fn rpc_messages(
     network_context: &NetworkContext,
-    type_label: &'static str,
+    message_type_label: &'static str,
+    message_direction_label: &'static str,
     state_label: &'static str,
 ) -> IntCounter {
     APTOS_NETWORK_RPC_MESSAGES.with_label_values(&[
         network_context.role().as_str(),
         network_context.network_id().as_str(),
         network_context.peer_id().short_str().as_str(),
-        type_label,
+        message_type_label,
+        message_direction_label,
         state_label,
     ])
 }
@@ -189,21 +197,30 @@ pub static APTOS_NETWORK_RPC_BYTES: Lazy<IntCounterVec> = Lazy::new(|| {
     register_int_counter_vec!(
         "aptos_network_rpc_bytes",
         "Number of RPC bytes transferred",
-        &["role_type", "network_id", "peer_id", "type", "state"]
+        &[
+            "role_type",
+            "network_id",
+            "peer_id",
+            "message_type",
+            "message_direction",
+            "state"
+        ]
     )
     .unwrap()
 });
 
 pub fn rpc_bytes(
     network_context: &NetworkContext,
-    type_label: &'static str,
+    message_type_label: &'static str,
+    message_direction_label: &'static str,
     state_label: &'static str,
 ) -> IntCounter {
     APTOS_NETWORK_RPC_BYTES.with_label_values(&[
         network_context.role().as_str(),
         network_context.network_id().as_str(),
         network_context.peer_id().short_str().as_str(),
-        type_label,
+        message_type_label,
+        message_direction_label,
         state_label,
     ])
 }

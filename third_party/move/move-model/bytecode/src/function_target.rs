@@ -15,6 +15,7 @@ use move_model::{
     ast::{Exp, ExpData, Spec, TempIndex},
     model::{
         FunId, FunctionEnv, GlobalEnv, Loc, ModuleEnv, QualifiedId, QualifiedInstId, StructId,
+        TypeParameter,
     },
     symbol::{Symbol, SymbolPool},
     ty::{Type, TypeDisplayContext},
@@ -170,6 +171,11 @@ impl<'env> FunctionTarget<'env> {
     /// Returns true if this function mutates any references (i.e. has &mut parameters).
     pub fn is_mutating(&self) -> bool {
         self.func_env.is_mutating()
+    }
+
+    /// Returns the type parameters of this function.
+    pub fn get_type_parameters(&self) -> Vec<TypeParameter> {
+        self.func_env.get_type_parameters()
     }
 
     /// Returns the number of type parameters associated with this function, this includes both
@@ -373,6 +379,7 @@ impl<'env> FunctionTarget<'env> {
         label_offsets: &BTreeMap<Label, CodeOffset>,
         offset: usize,
         code: &Bytecode,
+        verbose: bool,
     ) -> String {
         let mut texts = vec![];
 
@@ -383,7 +390,7 @@ impl<'env> FunctionTarget<'env> {
         }
 
         // add location
-        if cfg!(feature = "verbose-debug-print") {
+        if verbose {
             texts.push(format!(
                 "     # {}",
                 self.get_bytecode_loc(attr_id).display(self.global_env())
@@ -677,10 +684,12 @@ impl<'env> fmt::Display for FunctionTarget<'env> {
             }
             let label_offsets = Bytecode::label_offsets(self.get_bytecode());
             for (offset, code) in self.get_bytecode().iter().enumerate() {
+                // use `f.alternate()` to determine verbose print; its activated by `{:#}` instead of `{}`
+                // in the format string
                 writeln!(
                     f,
                     "{}",
-                    self.pretty_print_bytecode(&label_offsets, offset, code)
+                    self.pretty_print_bytecode(&label_offsets, offset, code, f.alternate())
                 )?;
             }
             writeln!(f, "}}")?;

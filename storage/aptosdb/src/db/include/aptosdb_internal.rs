@@ -44,8 +44,7 @@ impl AptosDB {
         AptosDB {
             ledger_db: Arc::clone(&ledger_db),
             state_kv_db: Arc::clone(&state_kv_db),
-            event_store: Arc::new(EventStore::new(ledger_db.event_db_arc())),
-            ledger_store: Arc::new(LedgerStore::new(Arc::clone(&ledger_db))),
+            event_store: Arc::new(EventStore::new(ledger_db.event_db().db_arc())),
             state_store,
             transaction_store: Arc::new(TransactionStore::new(Arc::clone(&ledger_db))),
             ledger_pruner,
@@ -57,7 +56,6 @@ impl AptosDB {
             ledger_commit_lock: std::sync::Mutex::new(()),
             indexer: None,
             skip_index_and_usage,
-            indexer_async_v2: None,
         }
     }
 
@@ -70,7 +68,6 @@ impl AptosDB {
         buffered_state_target_items: usize,
         max_num_nodes_per_lru_cache_shard: usize,
         empty_buffered_state_for_restore: bool,
-        enable_indexer_async_v2: bool,
     ) -> Result<Self> {
         ensure!(
             pruner_config.eq(&NO_OP_STORAGE_PRUNER_CONFIG) || !readonly,
@@ -102,13 +99,6 @@ impl AptosDB {
             )?;
         }
 
-        if enable_indexer_async_v2 {
-            myself.open_indexer_async_v2(
-                db_paths.default_root_path(),
-                rocksdb_configs.index_db_config,
-            )?;
-        }
-
         Ok(myself)
     }
 
@@ -126,10 +116,10 @@ impl AptosDB {
         );
 
         if indexer.next_version() < ledger_next_version {
-            let state_view = DbStateView {
-                db: self.state_store.clone(),
-                version: Some(ledger_next_version - 1),
-            };
+            use aptos_storage_interface::state_view::DbStateViewAtVersion;
+            let db : Arc<dyn DbReader> = self.state_store.clone();
+
+            let state_view = db.state_view_at_version(Some(ledger_next_version - 1))?;
             let resolver = state_view.as_move_resolver();
             let annotator = MoveValueAnnotator::new(&resolver);
 
@@ -139,7 +129,8 @@ impl AptosDB {
                 info!(next_version = next_version, "AptosDB Indexer catching up. ",);
                 let end_version = std::cmp::min(ledger_next_version, next_version + BATCH_SIZE);
                 let write_sets = self
-                    .transaction_store
+                    .ledger_db
+                    .write_set_db()
                     .get_write_sets(next_version, end_version)?;
                 let write_sets_ref: Vec<_> = write_sets.iter().collect();
                 indexer.index_with_annotator(&annotator, next_version, &write_sets_ref)?;
@@ -153,16 +144,6 @@ impl AptosDB {
         Ok(())
     }
 
-    fn open_indexer_async_v2(
-        &mut self,
-        db_root_path: impl AsRef<Path>,
-        rocksdb_config: RocksdbConfig,
-    ) -> Result<()> {
-        let indexer_async_v2 = IndexerAsyncV2::open(db_root_path, rocksdb_config, DashMap::new())?;
-        self.indexer_async_v2 = Some(indexer_async_v2);
-        Ok(())
-    }
-
     #[cfg(any(test, feature = "fuzzing"))]
     fn new_without_pruner<P: AsRef<Path> + Clone>(
         db_root_path: P,
@@ -170,7 +151,6 @@ impl AptosDB {
         buffered_state_target_items: usize,
         max_num_nodes_per_lru_cache_shard: usize,
         enable_indexer: bool,
-        enable_indexer_async_v2: bool,
     ) -> Self {
         Self::open(
             StorageDirPaths::from_path(db_root_path),
@@ -180,7 +160,6 @@ impl AptosDB {
             enable_indexer,
             buffered_state_target_items,
             max_num_nodes_per_lru_cache_shard,
-            enable_indexer_async_v2,
         )
         .expect("Unable to open AptosDB")
     }
@@ -213,7 +192,7 @@ impl AptosDB {
             .epoch_snapshot_pruner
             .get_min_readable_version();
         if version >= min_readable_epoch_snapshot_version {
-            self.ledger_store.ensure_epoch_ending(version)
+            self.ledger_db.metadata_db().ensure_epoch_ending(version)
         } else {
             bail!(
                 "{} at version {} is pruned. snapshots are available at >= {}, epoch snapshots are available at >= {}",
@@ -246,7 +225,7 @@ impl Debug for AptosDB {
 
 fn error_if_too_many_requested(num_requested: u64, max_allowed: u64) -> Result<()> {
     if num_requested > max_allowed {
-        Err(AptosDbError::TooManyRequested(num_requested, max_allowed).into())
+        Err(AptosDbError::TooManyRequested(num_requested, max_allowed))
     } else {
         Ok(())
     }

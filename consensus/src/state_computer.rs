@@ -30,11 +30,18 @@ use aptos_types::{
     epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
     on_chain_config::OnChainExecutionConfig,
+    randomness::Randomness,
     transaction::{SignedTransaction, Transaction},
 };
 use fail::fail_point;
 use futures::{future::BoxFuture, SinkExt, StreamExt};
-use std::{boxed::Box, sync::Arc};
+use std::{
+    boxed::Box,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+};
 use tokio::sync::Mutex as AsyncMutex;
 
 pub type StateComputeResultFut = BoxFuture<'static, ExecutorResult<PipelineExecutionResult>>;
@@ -61,7 +68,7 @@ impl PipelineExecutionResult {
 type NotificationType = (
     Box<dyn FnOnce() + Send + Sync>,
     Vec<Transaction>,
-    Vec<ContractEvent>,
+    Vec<ContractEvent>, // Subscribable events, e.g. NewEpochEvent, DKGStartEvent
 );
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
@@ -91,6 +98,7 @@ pub struct ExecutionProxy {
     transaction_deduper: Mutex<Option<Arc<dyn TransactionDeduper>>>,
     transaction_filter: Arc<TransactionFilter>,
     execution_pipeline: ExecutionPipeline,
+    randomness_enabled: AtomicBool,
 }
 
 impl ExecutionProxy {
@@ -105,10 +113,10 @@ impl ExecutionProxy {
             aptos_channels::new::<NotificationType>(10, &counters::PENDING_STATE_SYNC_NOTIFICATION);
         let notifier = state_sync_notifier.clone();
         handle.spawn(async move {
-            while let Some((callback, txns, reconfig_events)) = rx.next().await {
+            while let Some((callback, txns, subscribable_events)) = rx.next().await {
                 if let Err(e) = monitor!(
                     "notify_state_sync",
-                    notifier.notify_new_commit(txns, reconfig_events).await
+                    notifier.notify_new_commit(txns, subscribable_events).await
                 ) {
                     error!(error = ?e, "Failed to notify state synchronizer");
                 }
@@ -132,7 +140,36 @@ impl ExecutionProxy {
             transaction_deduper: Mutex::new(None),
             transaction_filter: Arc::new(txn_filter),
             execution_pipeline,
+            randomness_enabled: AtomicBool::new(false),
         }
+    }
+
+    pub fn transactions_to_commit(&self, executed_block: &ExecutedBlock) -> Vec<Transaction> {
+        // reconfiguration suffix don't execute
+        if executed_block.is_reconfiguration_suffix() {
+            return vec![];
+        }
+
+        let user_txns = executed_block.input_transactions().clone();
+        let validator_txns = executed_block.validator_txns().cloned().unwrap_or_default();
+        let validators = self.validators.lock();
+        let metadata = if self.randomness_enabled.load(Ordering::SeqCst) {
+            executed_block
+                .block()
+                .new_metadata_with_randomness(&validators, executed_block.randomness().cloned())
+        } else {
+            executed_block
+                .block()
+                .new_block_metadata(&validators)
+                .into()
+        };
+
+        let input_txns = Block::combine_to_input_transactions(validator_txns, user_txns, metadata);
+
+        // Adds StateCheckpoint/BlockEpilogue transaction if needed.
+        executed_block
+            .compute_result()
+            .transactions_to_commit(input_txns, executed_block.id())
     }
 }
 
@@ -144,6 +181,7 @@ impl StateComputer for ExecutionProxy {
         block: &Block,
         // The parent block id.
         parent_block_id: HashValue,
+        randomness: Option<Randomness>,
     ) -> StateComputeResultFut {
         let block_id = block.id();
         debug!(
@@ -163,7 +201,12 @@ impl StateComputer for ExecutionProxy {
         let block_executor_onchain_config = self.block_executor_onchain_config.lock().clone();
 
         let timestamp = block.timestamp_usecs();
-        let metadata = block.new_block_metadata(&self.validators.lock());
+        let metadata = if self.randomness_enabled.load(Ordering::SeqCst) {
+            block.new_metadata_with_randomness(&self.validators.lock(), randomness)
+        } else {
+            block.new_block_metadata(&self.validators.lock()).into()
+        };
+
         let fut = self
             .execution_pipeline
             .queue(
@@ -204,10 +247,9 @@ impl StateComputer for ExecutionProxy {
         callback: StateComputerCommitCallBackType,
     ) -> ExecutorResult<()> {
         let mut latest_logical_time = self.write_mutex.lock().await;
-
         let mut block_ids = Vec::new();
         let mut txns = Vec::new();
-        let mut reconfig_events = Vec::new();
+        let mut subscribable_txn_events = Vec::new();
         let mut payloads = Vec::new();
         let logical_time = LogicalTime::new(
             finality_proof.ledger_info().epoch(),
@@ -223,13 +265,8 @@ impl StateComputer for ExecutionProxy {
                 payloads.push(payload.clone());
             }
 
-            let input_txns = block.input_transactions().clone();
-            txns.extend(block.transactions_to_commit(
-                &self.validators.lock(),
-                block.validator_txns().cloned().unwrap_or_default(),
-                input_txns,
-            ));
-            reconfig_events.extend(block.reconfig_event());
+            txns.extend(self.transactions_to_commit(block));
+            subscribable_txn_events.extend(block.subscribable_events());
         }
 
         let executor = self.executor.clone();
@@ -251,7 +288,7 @@ impl StateComputer for ExecutionProxy {
         };
         self.async_state_sync_notifier
             .clone()
-            .send((Box::new(wrapped_callback), txns, reconfig_events))
+            .send((Box::new(wrapped_callback), txns, subscribable_txn_events))
             .await
             .expect("Failed to send async state sync notification");
 
@@ -319,6 +356,7 @@ impl StateComputer for ExecutionProxy {
         transaction_shuffler: Arc<dyn TransactionShuffler>,
         block_executor_onchain_config: BlockExecutorConfigFromOnchain,
         transaction_deduper: Arc<dyn TransactionDeduper>,
+        randomness_enabled: bool,
     ) {
         *self.validators.lock() = epoch_state
             .verifier
@@ -330,6 +368,8 @@ impl StateComputer for ExecutionProxy {
             .replace(transaction_shuffler);
         *self.block_executor_onchain_config.lock() = block_executor_onchain_config;
         self.transaction_deduper.lock().replace(transaction_deduper);
+        self.randomness_enabled
+            .store(randomness_enabled, Ordering::SeqCst);
     }
 
     // Clears the epoch-specific state. Only a sync_to call is expected before calling new_epoch
@@ -430,7 +470,7 @@ async fn test_commit_sync_race() {
         async fn notify_new_commit(
             &self,
             _transactions: Vec<Transaction>,
-            _reconfiguration_events: Vec<ContractEvent>,
+            _subscribable_events: Vec<ContractEvent>,
         ) -> std::result::Result<(), Error> {
             Ok(())
         }
@@ -471,12 +511,14 @@ async fn test_commit_sync_race() {
         &tokio::runtime::Handle::current(),
         TransactionFilter::new(Filter::empty()),
     );
+
     executor.new_epoch(
         &EpochState::empty(),
         Arc::new(PayloadManager::DirectMempool),
         create_transaction_shuffler(TransactionShufflerType::NoShuffling),
         BlockExecutorConfigFromOnchain::new_no_block_limit(),
         create_transaction_deduper(TransactionDeduperType::NoDedup),
+        false,
     );
     executor
         .commit(&[], generate_li(1, 1), callback.clone())

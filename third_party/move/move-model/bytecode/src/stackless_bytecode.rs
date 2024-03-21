@@ -161,7 +161,11 @@ pub enum Operation {
     BorrowGlobal(ModuleId, StructId, Vec<Type>),
 
     // Builtins
-    Destroy,
+    /// Indicates that the value is dropped.
+    Drop,
+    /// Indicates that the value is no longer borrowed.
+    Release,
+
     ReadRef,
     WriteRef,
     FreezeRef,
@@ -253,7 +257,8 @@ impl Operation {
             Operation::GetField(_, _, _, _) => false,
             Operation::GetGlobal(_, _, _) => true,
             Operation::Uninit => false,
-            Operation::Destroy => false,
+            Operation::Drop => false,
+            Operation::Release => false,
             Operation::ReadRef => false,
             Operation::WriteRef => false,
             Operation::FreezeRef => false,
@@ -409,6 +414,7 @@ pub enum Bytecode {
     Abort(AttrId, TempIndex),
     Nop(AttrId),
 
+    // Extended bytecode: spec-only.
     SaveMem(AttrId, MemoryLabel, QualifiedInstId<StructId>),
     SaveSpecVar(AttrId, MemoryLabel, QualifiedInstId<SpecVarId>),
     Prop(AttrId, PropKind, Exp),
@@ -482,6 +488,70 @@ impl Bytecode {
 
     pub fn is_branch(&self) -> bool {
         self.is_conditional_branch() || self.is_unconditional_branch()
+    }
+
+    /// Returns true if the bytecode is spec-only.
+    pub fn is_spec_only(&self) -> bool {
+        use Bytecode::*;
+        matches!(self, SaveMem(..) | SaveSpecVar(..) | Prop(..))
+    }
+
+    /// Return the sources of the instruction (for non-spec-only instructions).
+    /// If the instruction is spec-only instruction, this function panics.
+    pub fn sources(&self) -> Vec<TempIndex> {
+        match self {
+            Bytecode::Assign(_, _, src, _) => {
+                vec![*src]
+            },
+            Bytecode::Call(_, _, _, srcs, _) => srcs.clone(),
+            Bytecode::Ret(_, srcs) => srcs.clone(),
+            Bytecode::Branch(_, _, _, cond) => {
+                vec![*cond]
+            },
+            Bytecode::Abort(_, src) => {
+                vec![*src]
+            },
+            Bytecode::Load(_, _, _)
+            | Bytecode::Jump(_, _)
+            | Bytecode::Label(_, _)
+            | Bytecode::Nop(_) => {
+                vec![]
+            },
+            // Note that for all spec-only instructions, we currently return no sources.
+            Bytecode::SaveMem(_, _, _)
+            | Bytecode::SaveSpecVar(_, _, _)
+            | Bytecode::Prop(_, _, _) => {
+                unimplemented!("should not be called on spec-only instructions")
+            },
+        }
+    }
+
+    /// Return the destinations of the instruction.
+    pub fn dests(&self) -> Vec<TempIndex> {
+        match self {
+            Bytecode::Assign(_, dst, _, _) => {
+                vec![*dst]
+            },
+            Bytecode::Load(_, dst, _) => {
+                vec![*dst]
+            },
+            Bytecode::Call(_, dsts, _, _, on_abort) => {
+                let mut result = dsts.clone();
+                if let Some(AbortAction(_, dst)) = on_abort {
+                    result.push(*dst);
+                }
+                result
+            },
+            Bytecode::Ret(_, _)
+            | Bytecode::Branch(_, _, _, _)
+            | Bytecode::Jump(_, _)
+            | Bytecode::Label(_, _)
+            | Bytecode::Abort(_, _)
+            | Bytecode::Nop(_)
+            | Bytecode::SaveMem(_, _, _)
+            | Bytecode::SaveSpecVar(_, _, _)
+            | Bytecode::Prop(_, _, _) => Vec::new(),
+        }
     }
 
     /// Return the destination(s) if self is a branch/jump instruction
@@ -1058,8 +1128,11 @@ impl<'env> fmt::Display for OperationDisplay<'env> {
             Uninit => {
                 write!(f, "uninit")?;
             },
-            Destroy => {
-                write!(f, "destroy")?;
+            Drop => {
+                write!(f, "drop")?;
+            },
+            Release => {
+                write!(f, "release")?;
             },
             ReadRef => {
                 write!(f, "read_ref")?;

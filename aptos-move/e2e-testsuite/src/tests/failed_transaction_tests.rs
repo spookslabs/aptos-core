@@ -6,9 +6,8 @@ use aptos_gas_meter::{StandardGasAlgebra, StandardGasMeter};
 use aptos_gas_schedule::{AptosGasParameters, LATEST_GAS_FEATURE_VERSION};
 use aptos_language_e2e_tests::{common_transactions::peer_to_peer_txn, executor::FakeExecutor};
 use aptos_memory_usage_tracker::MemoryTrackedGasMeter;
-use aptos_state_view::TStateView;
 use aptos_types::{
-    state_store::state_key::StateKey,
+    state_store::{state_key::StateKey, TStateView},
     transaction::ExecutionStatus,
     vm_status::{StatusCode, VMStatus},
     write_set::WriteOp,
@@ -27,7 +26,10 @@ fn failed_transaction_cleanup_test() {
     executor.add_account_data(&sender);
 
     let log_context = AdapterLogSchema::new(executor.get_state_view().id(), 0);
-    let aptos_vm = AptosVM::new(&executor.get_state_view().as_move_resolver());
+    let aptos_vm = AptosVM::new(
+        &executor.get_state_view().as_move_resolver(),
+        /*override_is_delayed_field_optimization_capable=*/ None,
+    );
     let data_cache = executor.get_state_view().as_move_resolver();
 
     let txn_data = TransactionMetadata {

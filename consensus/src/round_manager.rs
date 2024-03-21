@@ -8,6 +8,7 @@ use crate::{
         BlockReader, BlockRetriever, BlockStore,
     },
     counters,
+    counters::{PROPOSED_VTXN_BYTES, PROPOSED_VTXN_COUNT},
     error::{error_kind, VerifyError},
     liveness::{
         proposal_generator::ProposalGenerator,
@@ -23,6 +24,7 @@ use crate::{
     pending_votes::VoteReceptionResult,
     persistent_liveness_storage::PersistentLivenessStorage,
     quorum_store::types::BatchMsg,
+    util::is_vtxn_expected,
 };
 use anyhow::{bail, ensure, Context};
 use aptos_channels::aptos_channel;
@@ -46,8 +48,10 @@ use aptos_logger::prelude::*;
 use aptos_safety_rules::ConsensusState;
 use aptos_safety_rules::TSafetyRules;
 use aptos_types::{
-    epoch_state::EpochState, on_chain_config::OnChainConsensusConfig,
-    validator_verifier::ValidatorVerifier, PeerId,
+    epoch_state::EpochState,
+    on_chain_config::{Features, OnChainConsensusConfig, ValidatorTxnConfig},
+    validator_verifier::ValidatorVerifier,
+    PeerId,
 };
 use fail::fail_point;
 use futures::{channel::oneshot, FutureExt, StreamExt};
@@ -79,6 +83,7 @@ impl UnverifiedEvent {
         quorum_store_enabled: bool,
         self_message: bool,
         max_num_batches: usize,
+        max_batch_expiry_gap_usecs: u64,
     ) -> Result<VerifiedEvent, VerifyError> {
         Ok(match self {
             //TODO: no need to sign and verify the proposal
@@ -104,7 +109,12 @@ impl UnverifiedEvent {
             },
             UnverifiedEvent::SignedBatchInfo(sd) => {
                 if !self_message {
-                    sd.verify(peer_id, max_num_batches, validator)?;
+                    sd.verify(
+                        peer_id,
+                        max_num_batches,
+                        max_batch_expiry_gap_usecs,
+                        validator,
+                    )?;
                 }
                 VerifiedEvent::SignedBatchInfo(sd)
             },
@@ -182,8 +192,10 @@ pub struct RoundManager {
     network: NetworkSender,
     storage: Arc<dyn PersistentLivenessStorage>,
     onchain_config: OnChainConsensusConfig,
+    vtxn_config: ValidatorTxnConfig,
     buffered_proposal_tx: aptos_channel::Sender<Author, VerifiedEvent>,
     local_config: ConsensusConfig,
+    features: Features,
 }
 
 impl RoundManager {
@@ -199,6 +211,7 @@ impl RoundManager {
         onchain_config: OnChainConsensusConfig,
         buffered_proposal_tx: aptos_channel::Sender<Author, VerifiedEvent>,
         local_config: ConsensusConfig,
+        features: Features,
     ) -> Self {
         // when decoupled execution is false,
         // the counter is still static.
@@ -208,6 +221,8 @@ impl RoundManager {
         counters::OP_COUNTERS
             .gauge("decoupled_execution")
             .set(onchain_config.decoupled_execution() as i64);
+        let vtxn_config = onchain_config.effective_validator_txn_config();
+        debug!("vtxn_config={:?}", vtxn_config);
         Self {
             epoch_state,
             block_store,
@@ -218,8 +233,10 @@ impl RoundManager {
             network,
             storage,
             onchain_config,
+            vtxn_config,
             buffered_proposal_tx,
             local_config,
+            features,
         }
     }
 
@@ -636,7 +653,7 @@ impl RoundManager {
             .author()
             .expect("Proposal should be verified having an author");
 
-        if !self.onchain_config.validator_txn_enabled()
+        if !self.vtxn_config.enabled()
             && matches!(
                 proposal.block_data().block_type(),
                 BlockType::ProposalExt(_)
@@ -646,6 +663,16 @@ impl RoundManager {
             bail!("ProposalExt unexpected while the feature is disabled.");
         }
 
+        if let Some(vtxns) = proposal.validator_txns() {
+            for vtxn in vtxns {
+                ensure!(
+                    is_vtxn_expected(&self.features, vtxn),
+                    "unexpected validator txn: {:?}",
+                    vtxn.topic()
+                );
+            }
+        }
+
         let (num_validator_txns, validator_txns_total_bytes): (usize, usize) =
             proposal.validator_txns().map_or((0, 0), |txns| {
                 txns.iter().fold((0, 0), |(count_acc, size_acc), txn| {
@@ -653,28 +680,53 @@ impl RoundManager {
                 })
             });
 
-        let payload_len = proposal.payload().map_or(0, |payload| payload.len());
-        let payload_size = proposal.payload().map_or(0, |payload| payload.size());
-        ensure!(
-            num_validator_txns as u64 + payload_len as u64
-                <= self
-                    .local_config
-                    .max_receiving_block_txns(self.onchain_config.quorum_store_enabled()),
-            "Payload len {} exceeds the limit {}",
-            payload_len,
-            self.local_config
-                .max_receiving_block_txns(self.onchain_config.quorum_store_enabled()),
+        let num_validator_txns = num_validator_txns as u64;
+        let validator_txns_total_bytes = validator_txns_total_bytes as u64;
+        let vtxn_count_limit = self.vtxn_config.per_block_limit_txn_count();
+        let vtxn_bytes_limit = self.vtxn_config.per_block_limit_total_bytes();
+        let author_hex = author.to_hex();
+        PROPOSED_VTXN_COUNT
+            .with_label_values(&[&author_hex])
+            .inc_by(num_validator_txns);
+        PROPOSED_VTXN_BYTES
+            .with_label_values(&[&author_hex])
+            .inc_by(validator_txns_total_bytes);
+        info!(
+            vtxn_count_limit = vtxn_count_limit,
+            vtxn_count_proposed = num_validator_txns,
+            vtxn_bytes_limit = vtxn_bytes_limit,
+            vtxn_bytes_proposed = validator_txns_total_bytes,
+            proposer = author_hex,
+            "Summarizing proposed validator txns."
         );
 
         ensure!(
-            validator_txns_total_bytes as u64 + payload_size as u64
-                <= self
-                    .local_config
-                    .max_receiving_block_bytes(self.onchain_config.quorum_store_enabled()),
+            num_validator_txns <= vtxn_count_limit,
+            "process_proposal failed with per-block vtxn count limit exceeded: limit={}, actual={}",
+            self.vtxn_config.per_block_limit_txn_count(),
+            num_validator_txns
+        );
+        ensure!(
+            validator_txns_total_bytes <= vtxn_bytes_limit,
+            "process_proposal failed with per-block vtxn bytes limit exceeded: limit={}, actual={}",
+            self.vtxn_config.per_block_limit_total_bytes(),
+            validator_txns_total_bytes
+        );
+        let payload_len = proposal.payload().map_or(0, |payload| payload.len());
+        let payload_size = proposal.payload().map_or(0, |payload| payload.size());
+        ensure!(
+            num_validator_txns + payload_len as u64 <= self.local_config.max_receiving_block_txns,
+            "Payload len {} exceeds the limit {}",
+            payload_len,
+            self.local_config.max_receiving_block_txns,
+        );
+
+        ensure!(
+            validator_txns_total_bytes + payload_size as u64
+                <= self.local_config.max_receiving_block_bytes,
             "Payload size {} exceeds the limit {}",
             payload_size,
-            self.local_config
-                .max_receiving_block_bytes(self.onchain_config.quorum_store_enabled()),
+            self.local_config.max_receiving_block_bytes,
         );
 
         ensure!(
@@ -754,7 +806,7 @@ impl RoundManager {
             while start.elapsed() < Duration::from_millis(timeout_ms) {
                 if !block_store.vote_back_pressure() {
                     if let Err(e) = self_sender.push(author, event) {
-                        error!("Failed to send event to round manager {:?}", e);
+                        warn!("Failed to send event to round manager {:?}", e);
                     }
                     break;
                 }
@@ -1043,7 +1095,7 @@ impl RoundManager {
                             unexpected_event => unreachable!("Unexpected event {:?}", unexpected_event),
                         }
                     };
-                    proposals.sort_by_key(|a| get_round(a));
+                    proposals.sort_by_key(get_round);
                     for proposal in proposals {
                         let result = match proposal {
                             VerifiedEvent::ProposalMsg(proposal_msg) => {

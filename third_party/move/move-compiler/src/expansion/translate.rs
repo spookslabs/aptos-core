@@ -248,7 +248,7 @@ pub fn program(
         for s in scripts {
             collected
                 .entry(s.function_name.value())
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(s)
         }
         let mut keyed: BTreeMap<Symbol, E::Script> = BTreeMap::new();
@@ -523,7 +523,6 @@ fn module_(
             .add_diag(diag!(Declarations::InvalidName, (name.loc(), msg)));
     }
 
-    let name = name;
     let name_loc = name.0.loc;
     let current_module = sp(name_loc, ModuleIdent_::new(*context.cur_address(), name));
     if context
@@ -747,7 +746,7 @@ fn unique_attributes(
                             .add_diag(diag!(Declarations::UnknownAttribute, (nloc, msg)));
                     } else if is_nested && known_attributes.contains(sym.as_str()) {
                         let msg = format!(
-                            "Known attribute '{}' is not expected in a nested attribute position.",
+                            "Attribute '{}' is not expected in a nested attribute position.",
                             sym.as_str()
                         );
                         context
@@ -761,7 +760,7 @@ fn unique_attributes(
                 debug_assert!(known.name() == sym.as_str());
                 if is_nested {
                     let msg = format!(
-                        "Known attribute '{}' is not expected in a nested attribute position",
+                        "Attribute '{}' is not expected in a nested attribute position",
                         sym.as_str()
                     );
                     context
@@ -773,7 +772,7 @@ fn unique_attributes(
                 let expected_positions = known.expected_positions();
                 if !expected_positions.contains(&attr_position) {
                     let msg = format!(
-                        "Known attribute '{}' is not expected with a {}",
+                        "Attribute '{}' is not expected with a {}",
                         known.name(),
                         attr_position
                     );

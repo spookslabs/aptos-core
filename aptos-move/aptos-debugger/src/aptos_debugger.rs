@@ -8,11 +8,11 @@ use aptos_gas_schedule::{MiscGasParameters, NativeGasParameters, LATEST_GAS_FEAT
 use aptos_memory_usage_tracker::MemoryTrackedGasMeter;
 use aptos_resource_viewer::{AnnotatedAccountStateBlob, AptosValueAnnotator};
 use aptos_rest_client::Client;
-use aptos_state_view::TStateView;
 use aptos_types::{
     account_address::AccountAddress,
     chain_id::ChainId,
     on_chain_config::{Features, OnChainConfig, TimedFeaturesBuilder},
+    state_store::TStateView,
     transaction::{
         signature_verified_transaction::SignatureVerifiedTransaction, SignedTransaction,
         Transaction, TransactionInfo, TransactionOutput, TransactionPayload, Version,
@@ -78,7 +78,15 @@ impl AptosDebugger {
 
         // TODO(Gas): revisit this.
         let resolver = state_view.as_move_resolver();
-        let vm = AptosVM::new(&resolver);
+        let vm = AptosVM::new(
+            &resolver,
+            /*override_is_delayed_field_optimization_capable=*/ Some(false),
+        );
+
+        // Module bundle is deprecated!
+        if let TransactionPayload::ModuleBundle(_) = txn.payload() {
+            anyhow::bail!("Module bundle payload has been removed")
+        }
 
         let (status, output, gas_profiler) = vm.execute_user_transaction_with_custom_gas_meter(
             &resolver,
@@ -100,8 +108,12 @@ impl AptosDebugger {
                         entry_func.function().to_owned(),
                         entry_func.ty_args().to_vec(),
                     ),
-                    TransactionPayload::ModuleBundle(..) => unreachable!("not supported"),
                     TransactionPayload::Multisig(..) => unimplemented!("not supported yet"),
+
+                    // Deprecated.
+                    TransactionPayload::ModuleBundle(..) => {
+                        unreachable!("Module bundle payload has already been checked")
+                    },
                 };
                 Ok(gas_profiler)
             },
@@ -226,6 +238,24 @@ impl AptosDebugger {
             .await
     }
 
+    pub async fn get_committed_transaction_at_version(
+        &self,
+        version: Version,
+    ) -> Result<(Transaction, TransactionInfo)> {
+        let (mut txns, mut info) = self.debugger.get_committed_transactions(version, 1).await?;
+
+        let txn = txns.pop().expect("there must be exactly 1 txn in the vec");
+        let info = info
+            .pop()
+            .expect("there must be exactly 1 txn info in the vec");
+
+        Ok((txn, info))
+    }
+
+    pub fn state_view_at_version(&self, version: Version) -> DebuggerStateView {
+        DebuggerStateView::new(self.debugger.clone(), version)
+    }
+
     pub fn run_session_at_version<F>(&self, version: Version, f: F) -> Result<VMChangeSet>
     where
         F: FnOnce(&mut SessionExt) -> VMResult<()>,
@@ -241,6 +271,7 @@ impl AptosDebugger {
             features,
             TimedFeaturesBuilder::enable_all().build(),
             &state_view_storage,
+            /*aggregator_v2_type_tagging*/ false,
         )
         .unwrap();
         let mut session = move_vm.new_session(&state_view_storage, SessionId::Void);

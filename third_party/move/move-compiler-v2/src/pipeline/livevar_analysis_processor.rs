@@ -7,10 +7,15 @@
 //!
 //! After transformation, this also runs copy inference transformation, which inserts
 //! copies as needed, and reports errors for invalid copies.
+//!
+//! This processor assumes that the CFG of the code has no critical edges.
 
+use super::ability_checker::check_copy;
+use crate::pipeline::ability_checker::has_ability;
+use abstract_domain_derive::AbstractDomain;
 use codespan_reporting::diagnostic::Severity;
 use itertools::Itertools;
-use move_binary_format::file_format::CodeOffset;
+use move_binary_format::file_format::{Ability, CodeOffset};
 use move_model::{
     ast::TempIndex,
     model::{FunctionEnv, Loc},
@@ -25,7 +30,7 @@ use move_stackless_bytecode::{
     stackless_control_flow_graph::StacklessControlFlowGraph,
 };
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
     iter::{empty, once},
 };
 
@@ -53,6 +58,27 @@ pub struct LiveVarInfoAtCodeOffset {
 }
 
 impl LiveVarInfoAtCodeOffset {
+    /// Returns the temporaries that are alive before the program point and dead after.
+    pub fn released_temps(&self) -> impl Iterator<Item = TempIndex> + '_ {
+        // TODO: make this linear
+        self.before
+            .keys()
+            .filter(|t| !self.after.contains_key(t))
+            .cloned()
+    }
+
+    /// Returns the temporaries that are alive before the program point and dead after, or introduced
+    /// by the given bytecode and dead after.
+    pub fn released_and_unused_temps(&self, bc: &Bytecode) -> BTreeSet<TempIndex> {
+        let mut result: BTreeSet<_> = self.released_temps().collect();
+        for dest in bc.dests() {
+            if !self.after.contains_key(&dest) {
+                result.insert(dest);
+            }
+        }
+        result
+    }
+
     /// Creates a set of the temporaries alive before this program point.
     pub fn before_set(&self) -> BTreeSet<TempIndex> {
         self.before.keys().cloned().collect()
@@ -74,14 +100,17 @@ pub struct LiveVarInfo {
 // =================================================================================================
 // Processor
 
-pub struct LiveVarAnalysisProcessor();
+pub struct LiveVarAnalysisProcessor {
+    // If set, run copy and move inference. Otherwise only compute livevar annotation.
+    pub with_copy_inference: bool,
+}
 
 impl FunctionTargetProcessor for LiveVarAnalysisProcessor {
     fn process(
         &self,
         _targets: &mut FunctionTargetsHolder,
         fun_env: &FunctionEnv,
-        data: FunctionData,
+        mut data: FunctionData,
         _scc_opt: Option<&[FunctionEnv]>,
     ) -> FunctionData {
         if fun_env.is_native() {
@@ -89,14 +118,19 @@ impl FunctionTargetProcessor for LiveVarAnalysisProcessor {
         }
         let target = FunctionTarget::new(fun_env, &data);
         let offset_to_live_refs = LiveVarAnnotation(self.analyze(&target));
-        let mut transformer = CopyTransformation { fun_env, data };
-        transformer.transform(&offset_to_live_refs);
-        // Now run the analyze a 2nd time, as we modified the code
-        let target = FunctionTarget::new(fun_env, &transformer.data);
-        let offset_to_live_refs = LiveVarAnnotation(self.analyze(&target));
-        // Annotate the result on the function data.
-        transformer.data.annotations.set(offset_to_live_refs, true);
-        transformer.data
+        if self.with_copy_inference {
+            let mut transformer = CopyTransformation { fun_env, data };
+            transformer.transform(&offset_to_live_refs);
+            // Now run the analyze a 2nd time, as we modified the code
+            let target = FunctionTarget::new(fun_env, &transformer.data);
+            let offset_to_live_refs = LiveVarAnnotation(self.analyze(&target));
+            // Annotate the result on the function data.
+            transformer.data.annotations.set(offset_to_live_refs, true);
+            transformer.data
+        } else {
+            data.annotations.set(offset_to_live_refs, true);
+            data
+        }
     }
 
     fn name(&self) -> String {
@@ -122,12 +156,56 @@ impl LiveVarAnalysisProcessor {
             code,
             &cfg,
         );
-        analyzer.state_per_instruction(state_map, code, &cfg, |before, after| {
-            LiveVarInfoAtCodeOffset {
-                before: before.livevars.clone().into_iter().collect(),
-                after: after.livevars.clone().into_iter().collect(),
+        // Prepare the result as a map from CodeOffset to LiveVarInfo
+        let mut code_map =
+            analyzer.state_per_instruction(state_map, code, &cfg, |before, after| {
+                LiveVarInfoAtCodeOffset {
+                    before: before.livevars.clone().into_iter().collect(),
+                    after: after.livevars.clone().into_iter().collect(),
+                }
+            });
+
+        // Now propagate to all branches in the code the `after` set of the branch instruction. Consider code as follows:
+        // ```
+        // L0: if c goto L1 else L2
+        // <x alive>
+        // L1: ..
+        //     goto L0
+        // L2: ..
+        // ```
+        // The backwards analysis will not populate the before state of `L1` and `L2` with `x` being alive unless it
+        // is used in the branch. However, from the forward program flow it follows that `x` is alive before
+        // `L1` and `L2` regardless of its usage. More specifically, it may have to be _dropped_ if it goes out
+        // of scope after the branch.
+        //
+        // This problem of values which "are lost on the edge" of the control graph can be dealt with by
+        // introducing extra edges. However, assuming that there are no critical edges, a simpler
+        // solution is the join `pre(L1) := pre(L1) join after(L0)`, and similar for `L2`.
+        let label_to_offset = Bytecode::label_offsets(code);
+        for (offs, bc) in code.iter().enumerate() {
+            let offs = offs as CodeOffset;
+            if let Bytecode::Branch(_, then_label, else_label, _) = bc {
+                let this = code_map[&offs].clone();
+                let then = code_map.get_mut(&label_to_offset[then_label]).unwrap();
+                Self::join_maps(&mut then.before, &this.after);
+                let else_ = code_map.get_mut(&label_to_offset[else_label]).unwrap();
+                Self::join_maps(&mut else_.before, &this.after);
             }
-        })
+        }
+        code_map
+    }
+
+    fn join_maps(m1: &mut BTreeMap<TempIndex, LiveVarInfo>, m2: &BTreeMap<TempIndex, LiveVarInfo>) {
+        for (k, v) in m2 {
+            match m1.entry(*k) {
+                Entry::Vacant(e) => {
+                    e.insert(v.clone());
+                },
+                Entry::Occupied(mut e) => {
+                    e.get_mut().join(v);
+                },
+            }
+        }
     }
 
     /// Registers annotation formatter at the given function target. This is for debugging and
@@ -141,15 +219,9 @@ impl LiveVarAnalysisProcessor {
 // Dataflow Analysis
 
 /// State of the livevar analysis,
-#[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
+#[derive(AbstractDomain, Debug, Clone, Eq, PartialEq, PartialOrd)]
 struct LiveVarState {
     livevars: MapDomain<TempIndex, LiveVarInfo>,
-}
-
-impl AbstractDomain for LiveVarState {
-    fn join(&mut self, other: &Self) -> JoinResult {
-        self.livevars.join(&other.livevars)
-    }
 }
 
 impl AbstractDomain for LiveVarInfo {
@@ -178,12 +250,8 @@ impl<'a> TransferFunctions for LiveVarAnalysis<'a> {
         use Bytecode::*;
         match instr {
             Assign(id, dst, src, _) => {
-                // Only if dst is used afterwards account for usage. Otherwise this is dead
-                // code.
-                if state.livevars.contains_key(dst) {
-                    state.livevars.remove(dst);
-                    state.livevars.insert(*src, self.livevar_info(id));
-                }
+                state.livevars.remove(dst);
+                state.livevars.insert(*src, self.livevar_info(id));
             },
             Load(_, dst, _) => {
                 state.livevars.remove(dst);
@@ -258,11 +326,7 @@ impl<'a> CopyTransformation<'a> {
         match bc {
             Assign(id, dst, src, kind) => match kind {
                 AssignKind::Inferred => {
-                    // TODO(#11223): Until we have info about whether a var may have had a reference
-                    // taken, be very conservative here and assume var is live.  Remove this hack
-                    // after fixing that bug.
-                    let force_copy_hack = !self.target().get_local_type(src).is_mutable_reference();
-                    if force_copy_hack || self.check_implicit_copy(alive, id, false, src) {
+                    if self.check_implicit_copy(alive, id, false, src) {
                         self.data.code.push(Assign(id, dst, src, AssignKind::Copy))
                     } else {
                         self.data.code.push(Assign(id, dst, src, AssignKind::Move))
@@ -277,9 +341,19 @@ impl<'a> CopyTransformation<'a> {
                     self.data.code.push(Assign(id, dst, src, AssignKind::Move))
                 },
             },
-            Call(_, _, Operation::BorrowLoc, _, _) => {
-                // Borrow does not consume its operand and need no copy
+            Call(_, _, Operation::BorrowLoc, _, _)
+            | Call(_, _, Operation::BorrowField(..), _, _)
+            | Call(_, _, Operation::ReadRef, _, _) => {
+                // Borrow and ReadRef does not consume its operand and need no copy
                 self.data.code.push(bc)
+            },
+            Call(id, dsts, Operation::WriteRef, srcs, ai) => {
+                // The reference parameter is not consumed and does not need copy
+                let mut new_srcs = self.copy_arg_if_needed(alive, id, vec![srcs[1]]);
+                new_srcs.insert(0, srcs[0]);
+                self.data
+                    .code
+                    .push(Call(id, dsts, Operation::WriteRef, new_srcs, ai))
             },
             Call(id, dsts, oper, srcs, ai) => {
                 let srcs = self.copy_arg_if_needed(alive, id, srcs);
@@ -321,14 +395,38 @@ impl<'a> CopyTransformation<'a> {
     fn check_implicit_copy(
         &self,
         alive: &LiveVarInfoAtCodeOffset,
-        _id: AttrId,
+        id: AttrId,
         _is_updated: bool,
         temp: TempIndex,
     ) -> bool {
-        // TODO(#10723): insert ability check here
-        // Notice we do allow copy of &mut. Those copies are checked for validity in
-        // reference safety.
-        alive.after.contains_key(&temp)
+        let target = self.target();
+        let ty = target.get_local_type(temp);
+        if !ty.is_reference()
+            && has_ability(&target, ty, Ability::Copy)
+            && has_ability(&target, ty, Ability::Drop)
+        {
+            // TODO(#11223): Until we have info about whether a var may have had a reference
+            // taken, be very conservative here and always copy if the type has both drop
+            // and copy ability. Notice we also need drop ability as with too many copies we
+            // may end up with the need to destroy a value, which requires drop.
+            // If conditions don't hold, reference analysis should give us an error if we move
+            // the value and references still exist.
+            true
+        } else {
+            let needed = alive.after.contains_key(&temp);
+            if needed {
+                check_copy(
+                    &target,
+                    ty,
+                    &target.get_bytecode_loc(id),
+                    &format!(
+                        "cannot copy {} implicitly",
+                        target.get_local_name_for_error_message(temp)
+                    ),
+                );
+            }
+            needed
+        }
     }
 
     fn make_hints_from_usage(
@@ -338,6 +436,20 @@ impl<'a> CopyTransformation<'a> {
         info.usages
             .iter()
             .map(|loc| (loc.clone(), "used here".to_owned()))
+    }
+
+    /// Checks whether the given temp has copy ability
+    /// add diagnostics if not
+    fn check_copy_for_temp(&self, target: &FunctionTarget, temp: TempIndex, id: AttrId) {
+        check_copy(
+            target,
+            target.get_local_type(temp),
+            &target.get_bytecode_loc(id),
+            &format!(
+                "cannot copy {} implicitly",
+                target.get_local_name_for_error_message(temp)
+            ),
+        );
     }
 
     /// Checks whether an implicit copy is needed because the value is used again in
@@ -365,7 +477,7 @@ impl<'a> CopyTransformation<'a> {
                 );
                 false
             } else {
-                // TODO(#10723): insert ability check here
+                self.check_copy_for_temp(&target, temp, id);
                 true
             }
         } else {
@@ -376,18 +488,10 @@ impl<'a> CopyTransformation<'a> {
     /// Checks whether an explicit copy is allowed.
     fn check_explicit_copy(&self, id: AttrId, temp: TempIndex) {
         let target = self.target();
-        if target.get_local_type(temp).is_mutable_reference() {
-            self.error_with_hints(
-                &target.get_bytecode_loc(id),
-                format!(
-                    "cannot copy mutable reference in {}",
-                    target.get_local_name_for_error_message(temp)
-                ),
-                "copied here",
-                empty(),
-            );
+        if !target.get_local_type(temp).is_mutable_reference() {
+            // Copy of mutable refs is checked in reference analysis
+            self.check_copy_for_temp(&target, temp, id)
         }
-        // TODO(#10723): insert ability check here
     }
 
     /// Checks whether an explicit move is allowed.

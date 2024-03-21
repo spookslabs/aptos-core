@@ -13,6 +13,8 @@ mod client;
 #[cfg(test)]
 mod consensus;
 #[cfg(test)]
+mod execution;
+#[cfg(test)]
 mod full_nodes;
 #[cfg(test)]
 mod fullnode;
@@ -22,6 +24,10 @@ mod genesis;
 mod indexer;
 #[cfg(test)]
 mod inspection_service;
+#[cfg(test)]
+mod jwks;
+#[cfg(test)]
+mod keyless;
 #[cfg(test)]
 mod network;
 #[cfg(test)]
@@ -50,4 +56,10 @@ mod smoke_test_environment;
 mod test_utils;
 
 #[cfg(test)]
+mod validator_txns;
+
+#[cfg(test)]
 mod workspace_builder;
+
+#[cfg(test)]
+pub(crate) mod utils;

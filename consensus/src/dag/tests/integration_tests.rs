@@ -3,7 +3,7 @@
 use super::dag_test;
 use crate::{
     dag::{bootstrap::bootstrap_dag_for_test, dag_state_sync::SyncOutcome},
-    network::{IncomingDAGRequest, NetworkSender},
+    network::{IncomingDAGRequest, NetworkSender, RpcResponder},
     network_interface::{ConsensusMsg, ConsensusNetworkClient, DIRECT_SEND, RPC},
     network_tests::{NetworkPlayground, TwinId},
     payload_manager::PayloadManager,
@@ -111,8 +111,10 @@ impl DagBootstrapUnit {
                         self.dag_rpc_tx.push(sender, IncomingDAGRequest {
                             req: msg,
                             sender,
-                            protocol,
-                            response_sender,
+                            responder: RpcResponder {
+                                protocol,
+                                response_sender,
+                            },
                         })
                     },
                     _ => unreachable!("expected only DAG-related messages"),
@@ -211,12 +213,11 @@ async fn test_dag_e2e() {
     let runtime = consensus_runtime();
     let mut playground = NetworkPlayground::new(runtime.handle().clone());
     let (signers, validators) = random_validator_verifier(num_nodes, None, false);
-
     let (nodes, mut ordered_node_receivers) = bootstrap_nodes(&mut playground, signers, validators);
-    for node in nodes {
-        runtime.spawn(node.start());
-    }
-
+    let tasks: Vec<_> = nodes
+        .into_iter()
+        .map(|node| runtime.spawn(node.start()))
+        .collect();
     runtime.spawn(playground.start());
 
     for _ in 1..10 {
@@ -227,11 +228,14 @@ async fn test_dag_e2e() {
         }
         let first = all_ordered.first().unwrap();
         assert_gt!(first.len(), 0, "must order nodes");
-        debug!("Nodes: {:?}", first);
         for a in all_ordered.iter() {
             assert_eq!(a.len(), first.len(), "length should match");
             assert_eq!(a, first);
         }
+    }
+    for task in tasks {
+        task.abort();
+        let _ = task.await;
     }
     runtime.shutdown_background();
 }

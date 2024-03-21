@@ -32,7 +32,6 @@ make it so that a reference to a global object can be returned from a function.
 -  [Struct `LinearTransferRef`](#0x1_object_LinearTransferRef)
 -  [Struct `DeriveRef`](#0x1_object_DeriveRef)
 -  [Struct `TransferEvent`](#0x1_object_TransferEvent)
--  [Resource `Ghost$g_roll`](#0x1_object_Ghost$g_roll)
 -  [Constants](#@Constants_0)
 -  [Function `is_burnt`](#0x1_object_is_burnt)
 -  [Function `address_to_object`](#0x1_object_address_to_object)
@@ -84,7 +83,8 @@ make it so that a reference to a global object can be returned from a function.
 -  [Function `is_owner`](#0x1_object_is_owner)
 -  [Function `owns`](#0x1_object_owns)
 -  [Specification](#@Specification_1)
-    -  [Module-level Specification](#@Module-level_Specification_2)
+    -  [High-level Requirements](#high-level-req)
+    -  [Module-level Specification](#module-level-spec)
     -  [Function `address_to_object`](#@Specification_1_address_to_object)
     -  [Function `create_object_address`](#@Specification_1_create_object_address)
     -  [Function `create_user_derived_object_address`](#@Specification_1_create_user_derived_object_address)
@@ -128,6 +128,7 @@ make it so that a reference to a global object can be returned from a function.
 <b>use</b> <a href="create_signer.md#0x1_create_signer">0x1::create_signer</a>;
 <b>use</b> <a href="../../aptos-stdlib/../move-stdlib/doc/error.md#0x1_error">0x1::error</a>;
 <b>use</b> <a href="event.md#0x1_event">0x1::event</a>;
+<b>use</b> <a href="../../aptos-stdlib/../move-stdlib/doc/features.md#0x1_features">0x1::features</a>;
 <b>use</b> <a href="../../aptos-stdlib/doc/from_bcs.md#0x1_from_bcs">0x1::from_bcs</a>;
 <b>use</b> <a href="guid.md#0x1_guid">0x1::guid</a>;
 <b>use</b> <a href="../../aptos-stdlib/../move-stdlib/doc/hash.md#0x1_hash">0x1::hash</a>;
@@ -487,33 +488,6 @@ Emitted whenever the object's owner field is changed.
 </dd>
 <dt>
 <code><b>to</b>: <b>address</b></code>
-</dt>
-<dd>
-
-</dd>
-</dl>
-
-
-</details>
-
-<a id="0x1_object_Ghost$g_roll"></a>
-
-## Resource `Ghost$g_roll`
-
-
-
-<pre><code><b>struct</b> Ghost$<a href="object.md#0x1_object_g_roll">g_roll</a> <b>has</b> <b>copy</b>, drop, store, key
-</code></pre>
-
-
-
-<details>
-<summary>Fields</summary>
-
-
-<dl>
-<dt>
-<code>v: u8</code>
 </dt>
 <dd>
 
@@ -1897,18 +1871,11 @@ objects may have cyclic dependencies.
 
     <b>let</b> current_address = <a href="object.md#0x1_object">object</a>.owner;
     <b>let</b> count = 0;
-    <b>while</b> ({
-        <b>spec</b> {
-            <b>invariant</b> count &lt; <a href="object.md#0x1_object_MAXIMUM_OBJECT_NESTING">MAXIMUM_OBJECT_NESTING</a>;
-            <b>invariant</b> <b>forall</b> i in 0..count:
-                <b>exists</b>&lt;<a href="object.md#0x1_object_ObjectCore">ObjectCore</a>&gt;(current_address) && <b>global</b>&lt;<a href="object.md#0x1_object_ObjectCore">ObjectCore</a>&gt;(current_address).allow_ungated_transfer;
-            // <b>invariant</b> <b>forall</b> i in 0..count:
-            //     current_address == get_transfer_address(<b>global</b>&lt;<a href="object.md#0x1_object_ObjectCore">ObjectCore</a>&gt;(destination).owner, i);
+    <b>while</b> (owner != current_address) {
+        count = count + 1;
+        <b>if</b> (std::features::max_object_nesting_check_enabled()) {
+            <b>assert</b>!(count &lt; <a href="object.md#0x1_object_MAXIMUM_OBJECT_NESTING">MAXIMUM_OBJECT_NESTING</a>, <a href="../../aptos-stdlib/../move-stdlib/doc/error.md#0x1_error_out_of_range">error::out_of_range</a>(<a href="object.md#0x1_object_EMAXIMUM_NESTING">EMAXIMUM_NESTING</a>))
         };
-        owner != current_address
-    }) {
-        <b>let</b> count = count + 1;
-        <b>assert</b>!(count &lt; <a href="object.md#0x1_object_MAXIMUM_OBJECT_NESTING">MAXIMUM_OBJECT_NESTING</a>, <a href="../../aptos-stdlib/../move-stdlib/doc/error.md#0x1_error_out_of_range">error::out_of_range</a>(<a href="object.md#0x1_object_EMAXIMUM_NESTING">EMAXIMUM_NESTING</a>));
         // At this point, the first <a href="object.md#0x1_object">object</a> <b>exists</b> and so the more likely case is that the
         // <a href="object.md#0x1_object">object</a>'s owner is not an <a href="object.md#0x1_object">object</a>. So we <b>return</b> a more sensible <a href="../../aptos-stdlib/../move-stdlib/doc/error.md#0x1_error">error</a>.
         <b>assert</b>!(
@@ -2108,16 +2075,11 @@ Return true if the provided address has indirect or direct ownership of the prov
     <b>let</b> current_address = <a href="object.md#0x1_object">object</a>.owner;
 
     <b>let</b> count = 0;
-    <b>while</b> ({
-        <b>spec</b> {
-            <b>invariant</b> count &lt; <a href="object.md#0x1_object_MAXIMUM_OBJECT_NESTING">MAXIMUM_OBJECT_NESTING</a>;
-            <b>invariant</b> <b>forall</b> i in 0..count:
-                owner != current_address && <b>exists</b>&lt;<a href="object.md#0x1_object_ObjectCore">ObjectCore</a>&gt;(current_address);
+    <b>while</b> (owner != current_address) {
+        count = count + 1;
+        <b>if</b> (std::features::max_object_nesting_check_enabled()) {
+            <b>assert</b>!(count &lt; <a href="object.md#0x1_object_MAXIMUM_OBJECT_NESTING">MAXIMUM_OBJECT_NESTING</a>, <a href="../../aptos-stdlib/../move-stdlib/doc/error.md#0x1_error_out_of_range">error::out_of_range</a>(<a href="object.md#0x1_object_EMAXIMUM_NESTING">EMAXIMUM_NESTING</a>))
         };
-        owner != current_address
-    }) {
-        <b>let</b> count = count + 1;
-        <b>assert</b>!(count &lt; <a href="object.md#0x1_object_MAXIMUM_OBJECT_NESTING">MAXIMUM_OBJECT_NESTING</a>, <a href="../../aptos-stdlib/../move-stdlib/doc/error.md#0x1_error_out_of_range">error::out_of_range</a>(<a href="object.md#0x1_object_EMAXIMUM_NESTING">EMAXIMUM_NESTING</a>));
         <b>if</b> (!<b>exists</b>&lt;<a href="object.md#0x1_object_ObjectCore">ObjectCore</a>&gt;(current_address)) {
             <b>return</b> <b>false</b>
         };
@@ -2138,15 +2100,76 @@ Return true if the provided address has indirect or direct ownership of the prov
 ## Specification
 
 
-<a id="@Module-level_Specification_2"></a>
+
+
+<a id="high-level-req"></a>
+
+### High-level Requirements
+
+<table>
+<tr>
+<th>No.</th><th>Requirement</th><th>Criticality</th><th>Implementation</th><th>Enforcement</th>
+</tr>
+
+<tr>
+<td>1</td>
+<td>It's not possible to create an object twice on the same address.</td>
+<td>Critical</td>
+<td>The create_object_internal function includes an assertion to ensure that the object being created does not already exist at the specified address.</td>
+<td>Formally verified via <a href="#high-level-req-1">create_object_internal</a>.</td>
+</tr>
+
+<tr>
+<td>2</td>
+<td>Only its owner may transfer an object.</td>
+<td>Critical</td>
+<td>The transfer function mandates that the transaction be signed by the owner's address, ensuring that only the rightful owner may initiate the object transfer.</td>
+<td>Audited that it aborts if anyone other than the owner attempts to transfer.</td>
+</tr>
+
+<tr>
+<td>3</td>
+<td>The indirect owner of an object may transfer the object.</td>
+<td>Medium</td>
+<td>The owns function evaluates to true when the given address possesses either direct or indirect ownership of the specified object.</td>
+<td>Audited that it aborts if address transferring is not indirect owner.</td>
+</tr>
+
+<tr>
+<td>4</td>
+<td>Objects may never change the address which houses them.</td>
+<td>Low</td>
+<td>After creating an object, transfers to another owner may occur. However, the address which stores the object may not be changed.</td>
+<td>This is implied by <a href="#high-level-req">high-level requirement 1</a>.</td>
+</tr>
+
+<tr>
+<td>5</td>
+<td>If an ungated transfer is disabled on an object in an indirect ownership chain, a transfer should not occur.</td>
+<td>Medium</td>
+<td>Calling disable_ungated_transfer disables direct transfer, and only TransferRef may trigger transfers. The transfer_with_ref function is called.</td>
+<td>Formally verified via <a href="#high-level-req-5">transfer_with_ref</a>.</td>
+</tr>
+
+<tr>
+<td>6</td>
+<td>Object addresses must not overlap with other addresses in different domains.</td>
+<td>Critical</td>
+<td>The current addressing scheme with suffixes does not conflict with any existing addresses, such as resource accounts. The GUID space is explicitly separated to ensure this doesn't happen.</td>
+<td>This is true by construction if one correctly ensures the usage of INIT_GUID_CREATION_NUM during the creation of GUID.</td>
+</tr>
+
+</table>
+
+
+
+
+<a id="module-level-spec"></a>
 
 ### Module-level Specification
 
 
-
 <pre><code><b>pragma</b> aborts_if_is_strict;
-<a id="0x1_object_g_roll"></a>
-<b>global</b> <a href="object.md#0x1_object_g_roll">g_roll</a>: u8;
 </code></pre>
 
 
@@ -2573,7 +2596,8 @@ Return true if the provided address has indirect or direct ownership of the prov
 
 
 
-<pre><code><b>aborts_if</b> <b>exists</b>&lt;<a href="object.md#0x1_object_ObjectCore">ObjectCore</a>&gt;(<a href="object.md#0x1_object">object</a>);
+<pre><code>// This enforces <a id="high-level-req-1" href="#high-level-req">high-level requirement 1</a>:
+<b>aborts_if</b> <b>exists</b>&lt;<a href="object.md#0x1_object_ObjectCore">ObjectCore</a>&gt;(<a href="object.md#0x1_object">object</a>);
 <b>ensures</b> <b>exists</b>&lt;<a href="object.md#0x1_object_ObjectCore">ObjectCore</a>&gt;(<a href="object.md#0x1_object">object</a>);
 <b>ensures</b> <b>global</b>&lt;<a href="object.md#0x1_object_ObjectCore">ObjectCore</a>&gt;(<a href="object.md#0x1_object">object</a>).guid_creation_num == <a href="object.md#0x1_object_INIT_GUID_CREATION_NUM">INIT_GUID_CREATION_NUM</a> + 1;
 <b>ensures</b> result == <a href="object.md#0x1_object_ConstructorRef">ConstructorRef</a> { self: <a href="object.md#0x1_object">object</a>, can_delete };
@@ -2771,6 +2795,7 @@ Return true if the provided address has indirect or direct ownership of the prov
 
 <pre><code><b>let</b> <a href="object.md#0x1_object">object</a> = <b>global</b>&lt;<a href="object.md#0x1_object_ObjectCore">ObjectCore</a>&gt;(ref.self);
 <b>aborts_if</b> !<b>exists</b>&lt;<a href="object.md#0x1_object_ObjectCore">ObjectCore</a>&gt;(ref.self);
+// This enforces <a id="high-level-req-5" href="#high-level-req">high-level requirement 5</a>:
 <b>aborts_if</b> <a href="object.md#0x1_object">object</a>.owner != ref.owner;
 <b>ensures</b> <b>global</b>&lt;<a href="object.md#0x1_object_ObjectCore">ObjectCore</a>&gt;(ref.self).owner == <b>to</b>;
 </code></pre>
@@ -2977,7 +3002,8 @@ Return true if the provided address has indirect or direct ownership of the prov
 
 
 
-<pre><code><b>let</b> current_address_0 = <a href="object.md#0x1_object">object</a>.inner;
+<pre><code><b>pragma</b> aborts_if_is_partial;
+<b>let</b> current_address_0 = <a href="object.md#0x1_object">object</a>.inner;
 <b>let</b> object_0 = <b>global</b>&lt;<a href="object.md#0x1_object_ObjectCore">ObjectCore</a>&gt;(current_address_0);
 <b>let</b> current_address = object_0.owner;
 <b>aborts_if</b> <a href="object.md#0x1_object">object</a>.inner != owner && !<b>exists</b>&lt;<a href="object.md#0x1_object_ObjectCore">ObjectCore</a>&gt;(<a href="object.md#0x1_object">object</a>.inner);

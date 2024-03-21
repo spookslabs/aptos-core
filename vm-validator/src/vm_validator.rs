@@ -4,7 +4,6 @@
 
 use anyhow::Result;
 use aptos_logger::info;
-use aptos_state_view::{account_with_state_view::AsAccountWithStateView, StateView};
 use aptos_storage_interface::{
     cached_state_view::CachedDbStateView,
     state_view::{DbStateView, LatestDbStateCheckpointView},
@@ -13,6 +12,7 @@ use aptos_storage_interface::{
 use aptos_types::{
     account_address::AccountAddress,
     account_view::AccountView,
+    state_store::{account_with_state_view::AsAccountWithStateView, StateView},
     transaction::{SignedTransaction, VMValidatorResult},
 };
 use aptos_vm::{data_cache::AsMoveResolver, AptosVM};
@@ -55,7 +55,10 @@ impl VMValidator {
             AdapterLogSchema::new(state_view.id(), 0),
             "AptosVM created for Validation"
         );
-        AptosVM::new(&state_view.as_move_resolver())
+        AptosVM::new(
+            &state_view.as_move_resolver(),
+            /*override_is_delayed_field_optimization_capable=*/ None,
+        )
     }
 
     pub fn new(db_reader: Arc<dyn DbReader>) -> Self {

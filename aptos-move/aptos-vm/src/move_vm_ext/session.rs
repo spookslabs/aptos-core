@@ -3,7 +3,7 @@
 
 use crate::{
     data_cache::get_resource_group_from_metadata,
-    move_vm_ext::{write_op_converter::WriteOpConverter, AptosMoveResolver},
+    move_vm_ext::{resource_state_key, write_op_converter::WriteOpConverter, AptosMoveResolver},
     transaction_metadata::TransactionMetadata,
 };
 use aptos_crypto::{hash::CryptoHash, HashValue};
@@ -15,8 +15,9 @@ use aptos_framework::natives::{
 };
 use aptos_table_natives::{NativeTableContext, TableChangeSet};
 use aptos_types::{
-    access_path::AccessPath, block_metadata::BlockMetadata, contract_event::ContractEvent,
-    on_chain_config::Features, state_store::state_key::StateKey,
+    access_path::AccessPath, block_metadata::BlockMetadata, block_metadata_ext::BlockMetadataExt,
+    contract_event::ContractEvent, on_chain_config::Features, state_store::state_key::StateKey,
+    validator_txn::ValidatorTransaction,
 };
 use aptos_vm_types::{change_set::VMChangeSet, storage::change_set_configs::ChangeSetConfigs};
 use bytes::Bytes;
@@ -26,10 +27,10 @@ use move_core_types::{
     effects::{AccountChanges, Changes, Op as MoveStorageOp},
     language_storage::{ModuleId, StructTag},
     value::MoveTypeLayout,
-    vm_status::{StatusCode, VMStatus},
+    vm_status::StatusCode,
 };
 use move_vm_runtime::{move_vm::MoveVM, session::Session};
-use move_vm_types::values::Value;
+use move_vm_types::{value_serde::serialize_and_allow_delayed_values, values::Value};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -79,6 +80,13 @@ pub enum SessionId {
         sequence_number: u64,
         script_hash: Vec<u8>,
     },
+    BlockMetaExt {
+        // block id
+        id: HashValue,
+    },
+    ValidatorTxn {
+        script_hash: Vec<u8>,
+    },
 }
 
 impl SessionId {
@@ -97,6 +105,12 @@ impl SessionId {
     pub fn block_meta(block_meta: &BlockMetadata) -> Self {
         Self::BlockMeta {
             id: block_meta.id(),
+        }
+    }
+
+    pub fn block_meta_ext(block_meta_ext: &BlockMetadataExt) -> Self {
+        Self::BlockMetaExt {
+            id: block_meta_ext.id(),
         }
     }
 
@@ -126,6 +140,12 @@ impl SessionId {
 
     pub fn void() -> Self {
         Self::Void
+    }
+
+    pub fn validator_txn(txn: &ValidatorTransaction) -> Self {
+        Self::ValidatorTxn {
+            script_hash: txn.hash().to_vec(),
+        }
     }
 
     pub fn as_uuid(&self) -> HashValue {
@@ -159,21 +179,32 @@ impl<'r, 'l> SessionExt<'r, 'l> {
                                   layout: MoveTypeLayout,
                                   has_aggregator_lifting: bool|
          -> PartialVMResult<BytesWithResourceLayout> {
-            value
-                .simple_serialize(&layout)
-                .map(Into::into)
-                .map(|bytes| (bytes, has_aggregator_lifting.then_some(Arc::new(layout))))
-                .ok_or_else(|| {
-                    PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                        .with_message(format!("Error when serializing resource {}.", value))
-                })
+            let serialization_result = if has_aggregator_lifting {
+                // We allow serialization of native values here because we want to
+                // temporarily store native values (via encoding to ensure deterministic
+                // gas charging) in block storage.
+                serialize_and_allow_delayed_values(&value, &layout)
+                    .map(|bytes| (bytes.into(), Some(Arc::new(layout))))
+            } else {
+                // Otherwise, there should be no native values so ensure
+                // serialization fails here if there are any.
+                value
+                    .simple_serialize(&layout)
+                    .map(|bytes| (bytes.into(), None))
+            };
+            serialization_result.ok_or_else(|| {
+                PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                    .with_message(format!("Error when serializing resource {}.", value))
+            })
         };
+
         let (change_set, mut extensions) = self
             .inner
             .finish_with_extensions_with_custom_effects(&resource_converter)?;
 
         let (change_set, resource_group_change_set) =
-            Self::split_and_merge_resource_groups(move_vm, self.remote, change_set)?;
+            Self::split_and_merge_resource_groups(move_vm, self.remote, change_set)
+                .map_err(|e| e.finish(Location::Undefined))?;
 
         let table_context: NativeTableContext = extensions.remove();
         let table_change_set = table_context
@@ -202,7 +233,7 @@ impl<'r, 'l> SessionExt<'r, 'l> {
             aggregator_change_set,
             configs,
         )
-        .map_err(|status| PartialVMError::new(status.status_code()).finish(Location::Undefined))?;
+        .map_err(|e| e.finish(Location::Undefined))?;
 
         Ok(change_set)
     }
@@ -217,11 +248,10 @@ impl<'r, 'l> SessionExt<'r, 'l> {
         state_key: StateKey,
         mut source_data: BTreeMap<StructTag, Bytes>,
         resources: BTreeMap<StructTag, MoveStorageOp<BytesWithResourceLayout>>,
-    ) -> VMResult<()> {
+    ) -> PartialVMResult<()> {
         let common_error = || {
             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                 .with_message("populate v0 resource group change set error".to_string())
-                .finish(Location::Undefined)
         };
 
         let create = source_data.is_empty();
@@ -286,18 +316,16 @@ impl<'r, 'l> SessionExt<'r, 'l> {
     ///
     /// V1 Resource group change set behavior keeps ops for individual resources separate, not
     /// merging them into the a single op corresponding to the whole resource group (V0).
-    /// TODO[agg_v2](fix) Resource groups are currently not handled correctly in terms of propagating MoveTypeLayout
     fn split_and_merge_resource_groups(
         runtime: &MoveVM,
         remote: &dyn AptosMoveResolver,
         change_set: ChangeSet,
-    ) -> VMResult<(ChangeSet, ResourceGroupChangeSet)> {
+    ) -> PartialVMResult<(ChangeSet, ResourceGroupChangeSet)> {
         // The use of this implies that we could theoretically call unwrap with no consequences,
         // but using unwrap means the code panics if someone can come up with an attack.
         let common_error = || {
             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                 .with_message("split_and_merge_resource_groups error".to_string())
-                .finish(Location::Undefined)
         };
         let mut change_set_filtered = ChangeSet::new();
 
@@ -328,7 +356,7 @@ impl<'r, 'l> SessionExt<'r, 'l> {
                 if let Some(resource_group_tag) = resource_group_tag {
                     if resource_groups
                         .entry(resource_group_tag)
-                        .or_insert_with(BTreeMap::new)
+                        .or_default()
                         .insert(struct_tag, blob_op)
                         .is_some()
                     {
@@ -369,9 +397,7 @@ impl<'r, 'l> SessionExt<'r, 'l> {
                         // Maintain the behavior of failing the transaction on resource
                         // group member existence invariants.
                         for (struct_tag, current_op) in resources.iter() {
-                            let exists = remote
-                                .resource_exists_in_group(&state_key, struct_tag)
-                                .map_err(|_| common_error())?;
+                            let exists = remote.resource_exists_in_group(&state_key, struct_tag)?;
                             if matches!(current_op, MoveStorageOp::New(_)) == exists {
                                 // Deletion and Modification require resource to exist,
                                 // while creation requires the resource to not exist.
@@ -395,7 +421,7 @@ impl<'r, 'l> SessionExt<'r, 'l> {
         table_change_set: TableChangeSet,
         aggregator_change_set: AggregatorChangeSet,
         configs: &ChangeSetConfigs,
-    ) -> Result<VMChangeSet, VMStatus> {
+    ) -> PartialVMResult<VMChangeSet> {
         let mut resource_write_set = BTreeMap::new();
         let mut resource_group_write_set = BTreeMap::new();
         let mut module_write_set = BTreeMap::new();
@@ -405,10 +431,7 @@ impl<'r, 'l> SessionExt<'r, 'l> {
         for (addr, account_changeset) in change_set.into_inner() {
             let (modules, resources) = account_changeset.into_inner();
             for (struct_tag, blob_and_layout_op) in resources {
-                let state_key = StateKey::access_path(
-                    AccessPath::resource_access_path(addr, struct_tag)
-                        .unwrap_or_else(|_| AccessPath::undefined()),
-                );
+                let state_key = resource_state_key(addr, struct_tag)?;
                 let op = woc.convert_resource(
                     &state_key,
                     blob_and_layout_op,

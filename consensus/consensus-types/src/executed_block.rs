@@ -6,17 +6,13 @@ use crate::{
     block::Block,
     common::{Payload, Round},
     quorum_cert::QuorumCert,
-    randomness::Randomness,
     vote_proposal::VoteProposal,
 };
 use aptos_crypto::hash::HashValue;
 use aptos_executor_types::StateComputeResult;
 use aptos_types::{
-    account_address::AccountAddress,
-    block_info::BlockInfo,
-    contract_event::ContractEvent,
-    transaction::{SignedTransaction, Transaction},
-    validator_txn::ValidatorTransaction,
+    block_info::BlockInfo, contract_event::ContractEvent, randomness::Randomness,
+    transaction::SignedTransaction, validator_txn::ValidatorTransaction,
 };
 use once_cell::sync::OnceCell;
 use std::{
@@ -157,33 +153,12 @@ impl ExecutedBlock {
         )
     }
 
-    pub fn transactions_to_commit(
-        &self,
-        validators: &[AccountAddress],
-        validator_txns: Vec<ValidatorTransaction>,
-        txns: Vec<SignedTransaction>,
-    ) -> Vec<Transaction> {
-        // reconfiguration suffix don't execute
-
-        if self.is_reconfiguration_suffix() {
-            return vec![];
-        }
-
-        let input_txns = self
-            .block
-            .transactions_to_execute(validators, validator_txns, txns);
-
-        // Adds StateCheckpoint/BlockEpilogue transaction if needed.
-        self.state_compute_result
-            .transactions_to_commit(input_txns, self.id())
-    }
-
-    pub fn reconfig_event(&self) -> Vec<ContractEvent> {
+    pub fn subscribable_events(&self) -> Vec<ContractEvent> {
         // reconfiguration suffix don't count, the state compute result is carried over from parents
         if self.is_reconfiguration_suffix() {
             return vec![];
         }
-        self.state_compute_result.reconfig_events().to_vec()
+        self.state_compute_result.subscribable_events().to_vec()
     }
 
     /// The block is suffix of a reconfiguration block if the state result carries over the epoch state

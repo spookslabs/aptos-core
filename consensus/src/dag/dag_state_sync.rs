@@ -3,7 +3,7 @@
 use super::{
     adapter::TLedgerInfoProvider,
     dag_fetcher::TDagFetcher,
-    dag_store::Dag,
+    dag_store::DagStore,
     storage::DAGStorage,
     types::{CertifiedNodeMessage, RemoteFetchRequest},
     ProofNotifier,
@@ -15,7 +15,6 @@ use crate::{
 use anyhow::ensure;
 use aptos_channels::aptos_channel;
 use aptos_consensus_types::common::{Author, Round};
-use aptos_infallible::RwLock;
 use aptos_logger::{debug, error};
 use aptos_time_service::TimeService;
 use aptos_types::{
@@ -45,7 +44,7 @@ impl fmt::Display for SyncOutcome {
 pub(super) struct StateSyncTrigger {
     epoch_state: Arc<EpochState>,
     ledger_info_provider: Arc<dyn TLedgerInfoProvider>,
-    dag_store: Arc<RwLock<Dag>>,
+    dag_store: Arc<DagStore>,
     proof_notifier: Arc<dyn ProofNotifier>,
     dag_window_size_config: Round,
 }
@@ -54,7 +53,7 @@ impl StateSyncTrigger {
     pub(super) fn new(
         epoch_state: Arc<EpochState>,
         ledger_info_provider: Arc<dyn TLedgerInfoProvider>,
-        dag_store: Arc<RwLock<Dag>>,
+        dag_store: Arc<DagStore>,
         proof_notifier: Arc<dyn ProofNotifier>,
         dag_window_size_config: Round,
     ) -> Self {
@@ -79,8 +78,7 @@ impl StateSyncTrigger {
         Ok(())
     }
 
-    /// This method checks if a state sync is required, and if so,
-    /// notifies the bootstraper, to let the bootstraper can abort this task.
+    /// This method checks if a state sync is required
     pub(super) async fn check(&self, node: CertifiedNodeMessage) -> anyhow::Result<SyncOutcome> {
         let ledger_info_with_sigs = node.ledger_info();
 
@@ -139,9 +137,9 @@ impl StateSyncTrigger {
         }
 
         let dag_reader = self.dag_store.read();
-        // check whether if DAG order round is behind the given ledger info round
+        // check whether if DAG order round is behind the given ledger info committed round
         // (meaning consensus is behind) or
-        // the highest committed anchor round is 2*DAG_WINDOW behind the given ledger info round
+        // the local highest committed anchor round is 2*DAG_WINDOW behind the given ledger info round
         // (meaning execution is behind the DAG window)
 
         // fetch can't work since nodes are garbage collected
@@ -187,9 +185,9 @@ impl DagStateSynchronizer {
     pub(crate) fn build_request(
         &self,
         node: &CertifiedNodeMessage,
-        current_dag_store: Arc<RwLock<Dag>>,
+        current_dag_store: Arc<DagStore>,
         highest_committed_anchor_round: Round,
-    ) -> (RemoteFetchRequest, Vec<Author>, Arc<RwLock<Dag>>) {
+    ) -> (RemoteFetchRequest, Vec<Author>, Arc<DagStore>) {
         let commit_li = node.ledger_info();
 
         {
@@ -213,13 +211,13 @@ impl DagStateSynchronizer {
             .commit_info()
             .round()
             .saturating_sub(self.dag_window_size_config);
-        let sync_dag_store = Arc::new(RwLock::new(Dag::new_empty(
+        let sync_dag_store = Arc::new(DagStore::new_empty(
             self.epoch_state.clone(),
             self.storage.clone(),
             self.payload_manager.clone(),
             start_round,
             self.dag_window_size_config,
-        )));
+        ));
         let bitmask = { sync_dag_store.read().bitmask(target_round) };
         let request = RemoteFetchRequest::new(
             self.epoch_state.epoch,
@@ -241,9 +239,9 @@ impl DagStateSynchronizer {
         dag_fetcher: impl TDagFetcher,
         request: RemoteFetchRequest,
         responders: Vec<Author>,
-        sync_dag_store: Arc<RwLock<Dag>>,
+        sync_dag_store: Arc<DagStore>,
         commit_li: LedgerInfoWithSignatures,
-    ) -> anyhow::Result<Dag> {
+    ) -> anyhow::Result<DagStore> {
         match dag_fetcher
             .fetch(request, responders, sync_dag_store.clone())
             .await
@@ -257,7 +255,7 @@ impl DagStateSynchronizer {
 
         self.state_computer.sync_to(commit_li).await?;
 
-        Ok(Arc::into_inner(sync_dag_store).unwrap().into_inner())
+        Ok(Arc::into_inner(sync_dag_store).unwrap())
     }
 }
 

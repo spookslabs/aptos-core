@@ -25,7 +25,6 @@ aptos-keygen = { workspace = true }
 aptos-language-e2e-tests = { workspace = true }
 aptos-logger = { workspace = true }
 aptos-package-builder = { workspace = true }
-aptos-state-view = { workspace = true }
 aptos-types = { workspace = true }
 aptos-vm = { workspace = true, features = ["testing"] }
 aptos-vm-genesis = { workspace = true }
@@ -48,6 +47,7 @@ tempfile = { workspace = true }
 test-case = { workspace = true }
 
 [dev-dependencies]
+aptos-vm-types = { workspace = true }
 claims = { workspace = true }
 test-case = { workspace = true }
 

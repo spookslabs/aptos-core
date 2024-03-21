@@ -30,14 +30,14 @@ use crate::{
     },
     symbol::{Symbol, SymbolPool},
     ty::{
-        NoUnificationContext, PrimitiveType, ReferenceKind, Type, TypeDisplayContext,
-        TypeUnificationAdapter, Variance,
+        gen_get_ty_param_kinds, infer_abilities, NoUnificationContext, PrimitiveType,
+        ReferenceKind, Type, TypeDisplayContext, TypeUnificationAdapter, Variance,
     },
     well_known,
 };
 use codespan::{ByteIndex, ByteOffset, ColumnOffset, FileId, Files, LineOffset, Location, Span};
 use codespan_reporting::{
-    diagnostic::{Diagnostic, Label, Severity},
+    diagnostic::{Diagnostic, Label, LabelStyle, Severity},
     term::{emit, termcolor::WriteColor, Config},
 };
 use itertools::Itertools;
@@ -827,6 +827,11 @@ impl GlobalEnv {
         self.diag_with_notes(Severity::Error, loc, msg, notes)
     }
 
+    /// Adds an error to this environment, with notes.
+    pub fn error_with_labels(&self, loc: &Loc, msg: &str, labels: Vec<(Loc, String)>) {
+        self.diag_with_labels(Severity::Error, loc, msg, labels)
+    }
+
     /// Add a label to `labels` to specify "inlined from loc" for the `loc` in `inlined_from`,
     /// and, if that is inlined from someplace, repeat as needed, etc.
     fn add_inlined_from_labels(labels: &mut Vec<Label<FileId>>, inlined_from: &Option<Box<Loc>>) {
@@ -834,7 +839,7 @@ impl GlobalEnv {
         while let Some(boxed_loc) = inlined_from {
             let loc = boxed_loc.as_ref();
             let new_label = Label::secondary(loc.file_id, loc.span)
-                .with_message("in a call inlined at this callsite");
+                .with_message("from a call inlined at this callsite");
             labels.push(new_label);
             inlined_from = &loc.inlined_from_loc;
         }
@@ -863,7 +868,7 @@ impl GlobalEnv {
         self.add_diag(diag);
     }
 
-    /// Adds a diagnostic of given severity to this environment, with secondary labels.
+    /// Adds a diagnostic of given severity to this environment, with labels.
     pub fn diag_with_labels(
         &self,
         severity: Severity,
@@ -871,10 +876,10 @@ impl GlobalEnv {
         msg: &str,
         labels: Vec<(Loc, String)>,
     ) {
-        self.diag_with_primary_and_labels(severity, loc, msg, "", labels)
+        self.diag_with_primary_and_labels(severity, loc, msg, "", labels);
     }
 
-    /// Adds a diagnostic of given severity to this environment, with primary and secondary labels.
+    /// Adds a diagnostic of given severity to this environment, with primary and primary labels.
     pub fn diag_with_primary_and_labels(
         &self,
         severity: Severity,
@@ -884,16 +889,24 @@ impl GlobalEnv {
         labels: Vec<(Loc, String)>,
     ) {
         let new_msg = Self::add_backtrace(msg, severity == Severity::Bug);
-        let diag = Diagnostic::new(severity)
-            .with_message(new_msg)
-            .with_labels(vec![
-                Label::primary(loc.file_id, loc.span).with_message(primary)
-            ]);
-        let mut labels = labels
+
+        // primary
+        let diag = Diagnostic::new(severity).with_message(new_msg);
+        // if primary loc is inlined, add qualifiers
+        let mut primary_labels = vec![Label::primary(loc.file_id, loc.span).with_message(primary)];
+        GlobalEnv::add_inlined_from_labels(&mut primary_labels, &loc.inlined_from_loc);
+        let diag = diag.with_labels(primary_labels);
+
+        // add "inlined from" qualifiers to secondary labels as needed
+        let labels = labels
             .into_iter()
-            .map(|(l, m)| Label::secondary(l.file_id, l.span).with_message(m))
-            .collect_vec();
-        GlobalEnv::add_inlined_from_labels(&mut labels, &loc.inlined_from_loc);
+            .map(|(loc, msg)| {
+                let mut expanded_labels =
+                    vec![Label::secondary(loc.file_id, loc.span).with_message(msg)];
+                GlobalEnv::add_inlined_from_labels(&mut expanded_labels, &loc.inlined_from_loc);
+                expanded_labels
+            })
+            .concat();
         let diag = diag.with_labels(labels);
         self.add_diag(diag);
     }
@@ -1075,6 +1088,82 @@ impl GlobalEnv {
         self.report_diag_with_filter(writer, |d| d.severity >= severity)
     }
 
+    // Comparison of Diagnostic values that tries to match program ordering so we
+    // can display them to the user in a more natural order.
+    fn cmp_diagnostic(diag1: &Diagnostic<FileId>, diag2: &Diagnostic<FileId>) -> Ordering {
+        let labels_ordering = GlobalEnv::cmp_labels(&diag1.labels, &diag2.labels);
+        if Ordering::Equal == labels_ordering {
+            let sev_ordering = diag1
+                .severity
+                .partial_cmp(&diag2.severity)
+                .expect("Severity provides a total ordering for valid severity enum values");
+            if Ordering::Equal == sev_ordering {
+                let message_ordering = diag1.message.cmp(&diag2.message);
+                if Ordering::Equal == message_ordering {
+                    diag1.code.cmp(&diag2.code)
+                } else {
+                    message_ordering
+                }
+            } else {
+                sev_ordering
+            }
+        } else {
+            labels_ordering
+        }
+    }
+
+    // Label comparison that tries to match program ordering.  `FileId` is already set in visitation
+    // order, so we honor that.  Within the same file, we order by labelled code ranges.  For labels
+    // marking nested regions, we want the innermost region, so we order first by end of labelled
+    // code region, then in reverse by start of region.
+    fn cmp_label(label1: &Label<FileId>, label2: &Label<FileId>) -> Ordering {
+        let file_ordering = label1.file_id.cmp(&label2.file_id);
+        if Ordering::Equal == file_ordering {
+            // First order by end of region.
+            let end1 = label1.range.end;
+            let end2 = label2.range.end;
+            let end_ordering = end1.cmp(&end2);
+            if Ordering::Equal == end_ordering {
+                let start1 = label1.range.start;
+                let start2 = label2.range.start;
+
+                // For nested regions with same end, show inner-most region first.
+                // Swap 1 and 2 in comparing starts.
+                start2.cmp(&start1)
+            } else {
+                end_ordering
+            }
+        } else {
+            file_ordering
+        }
+    }
+
+    // Label comparison within a list of labels for a given diagnostic, which orders by priority
+    // first, then files and line numbers.
+    fn cmp_label_priority(label1: &Label<FileId>, label2: &Label<FileId>) -> Ordering {
+        use LabelStyle::*;
+        match (label1.style, label2.style) {
+            (Primary, Secondary) => Ordering::Less,
+            (Secondary, Primary) => Ordering::Greater,
+            (_, _) => GlobalEnv::cmp_label(label1, label2),
+        }
+    }
+
+    // Comparison for sets of labels that orders them based on program ordering, using
+    // the earliest label found.  If a `Primary` label is found then `Secondary` labels
+    // are ignored, but if all are `Secondary` then the earliest of those is used in
+    // the ordering.
+    fn cmp_labels(labels1: &[Label<FileId>], labels2: &[Label<FileId>]) -> Ordering {
+        let mut sorted_labels1 = labels1.iter().collect_vec();
+        sorted_labels1.sort_by(|l1, l2| GlobalEnv::cmp_label_priority(l1, l2));
+        let mut sorted_labels2 = labels2.iter().collect_vec();
+        sorted_labels2.sort_by(|l1, l2| GlobalEnv::cmp_label_priority(l1, l2));
+        std::iter::zip(sorted_labels1, sorted_labels2)
+            .map(|(l1, l2)| GlobalEnv::cmp_label(l1, l2))
+            .find(|r| Ordering::Equal != *r)
+            .unwrap_or(Ordering::Equal)
+    }
+
     /// Writes accumulated diagnostics that pass through `filter`
     pub fn report_diag_with_filter<W: WriteColor, F: FnMut(&Diagnostic<FileId>) -> bool>(
         &self,
@@ -1082,25 +1171,19 @@ impl GlobalEnv {
         mut filter: F,
     ) {
         let mut shown = BTreeSet::new();
-        self.diags.borrow_mut().sort_by(|a, b| match a.1.cmp(&b.1) {
-            Ordering::Less => Ordering::Less,
-            Ordering::Greater => Ordering::Greater,
-            Ordering::Equal => match a.0.severity.partial_cmp(&b.0.severity) {
-                Some(Ordering::Less) => Ordering::Less,
-                Some(Ordering::Greater) => Ordering::Greater,
-                None | Some(Ordering::Equal) => match (&a.0.code, &b.0.code) {
-                    (None, None) => Ordering::Equal,
-                    (None, Some(_)) => Ordering::Less,
-                    (Some(_), None) => Ordering::Greater,
-                    (Some(acode), Some(bcode)) => acode.cmp(bcode),
-                },
-            },
+        self.diags.borrow_mut().sort_by(|a, b| {
+            let reported_ordering = a.1.cmp(&b.1);
+            if Ordering::Equal == reported_ordering {
+                GlobalEnv::cmp_diagnostic(&a.0, &b.0)
+            } else {
+                reported_ordering
+            }
         });
         for (diag, reported) in self
             .diags
             .borrow_mut()
             .iter_mut()
-            .filter(|(d, _)| filter(d))
+            .filter(|(d, reported)| !reported && filter(d))
         {
             if !*reported {
                 // Avoid showing the same message twice. This can happen e.g. because of
@@ -1120,7 +1203,7 @@ impl GlobalEnv {
         for memory in &inv.mem_usage {
             self.global_invariants_for_memory
                 .entry(memory.clone())
-                .or_insert_with(BTreeSet::new)
+                .or_default()
                 .insert(id);
         }
         self.global_invariants.insert(id, inv);
@@ -1218,45 +1301,11 @@ impl GlobalEnv {
 
     /// Computes the abilities associated with the given type.
     pub fn type_abilities(&self, ty: &Type, ty_params: &[TypeParameter]) -> AbilitySet {
-        match ty {
-            Type::Primitive(p) => match p {
-                PrimitiveType::Bool
-                | PrimitiveType::U8
-                | PrimitiveType::U16
-                | PrimitiveType::U32
-                | PrimitiveType::U64
-                | PrimitiveType::U128
-                | PrimitiveType::U256
-                | PrimitiveType::Num
-                | PrimitiveType::Range
-                | PrimitiveType::EventStore
-                | PrimitiveType::Address => AbilitySet::PRIMITIVES,
-                PrimitiveType::Signer => AbilitySet::SIGNER,
-            },
-            Type::Vector(et) => AbilitySet::VECTOR.intersect(self.type_abilities(et, ty_params)),
-            Type::Struct(mid, sid, inst) => {
-                let struct_env = self.get_struct(mid.qualified(*sid));
-                let mut abilities = struct_env.get_abilities();
-                for inst_ty in inst {
-                    abilities = abilities.intersect(self.type_abilities(inst_ty, ty_params))
-                }
-                abilities
-            },
-            Type::TypeParameter(i) => {
-                if let Some(tp) = ty_params.get(*i as usize) {
-                    tp.1.abilities
-                } else {
-                    AbilitySet::EMPTY
-                }
-            },
-            Type::Reference(_, _) => AbilitySet::REFERENCES,
-            Type::Fun(_, _)
-            | Type::Tuple(_)
-            | Type::TypeDomain(_)
-            | Type::ResourceDomain(_, _, _)
-            | Type::Error
-            | Type::Var(_) => AbilitySet::EMPTY,
-        }
+        infer_abilities(
+            ty,
+            gen_get_ty_param_kinds(ty_params),
+            self.gen_get_struct_sig(),
+        )
     }
 
     /// Returns associated intrinsics.
@@ -1613,9 +1662,43 @@ impl GlobalEnv {
         self.get_module(fun.module_id).into_function(fun.id)
     }
 
+    /// Sets the AST based definition of the function.
+    pub fn set_function_def(&mut self, fun: QualifiedId<FunId>, def: Exp) {
+        let data = self
+            .module_data
+            .get_mut(fun.module_id.to_usize())
+            .unwrap()
+            .function_data
+            .get_mut(&fun.id)
+            .unwrap();
+        data.called_funs = Some(def.called_funs());
+        data.def = Some(def);
+    }
+
     /// Return the `StructEnv` for `str`
     pub fn get_struct(&self, str: QualifiedId<StructId>) -> StructEnv<'_> {
         self.get_module(str.module_id).into_struct(str.id)
+    }
+
+    /// Generates a function that given module id, struct id,
+    /// returns the struct signature
+    pub fn gen_get_struct_sig(
+        &self,
+    ) -> impl Fn(ModuleId, StructId) -> (Vec<TypeParameterKind>, AbilitySet) + Copy + '_ {
+        |mid, sid| {
+            let qid = QualifiedId {
+                module_id: mid,
+                id: sid,
+            };
+            let struct_env = self.get_struct(qid);
+            let struct_abilities = struct_env.get_abilities();
+            let ty_param_kinds = struct_env
+                .get_type_parameters()
+                .iter()
+                .map(|tp| tp.1.clone())
+                .collect_vec();
+            (ty_param_kinds, struct_abilities)
+        }
     }
 
     // Gets the number of modules in this environment.
@@ -2124,7 +2207,7 @@ impl GlobalEnv {
             writer.unindent()
         }
         let fun_def = fun.get_def();
-        if let Some(exp) = fun_def.as_deref() {
+        if let Some(exp) = fun_def {
             emitln!(writer, " {");
             writer.indent();
             emitln!(writer, "{}", exp.display_for_fun(fun.clone()));
@@ -2303,9 +2386,14 @@ impl<'env> ModuleEnv<'env> {
         &self.data.use_decls
     }
 
-    /// Does this module have a friend with `module_id`?
+    /// Does this module declare `module_id` as a friend?
     pub fn has_friend(&self, module_id: &ModuleId) -> bool {
         self.data.friend_modules.contains(module_id)
+    }
+
+    /// Does this module have any friends?
+    pub fn has_no_friends(&self) -> bool {
+        self.data.friend_modules.is_empty()
     }
 
     /// Returns full name as a string.
@@ -3279,14 +3367,35 @@ impl<'env> NamedConstantEnv<'env> {
 // =================================================================================================
 /// # Function Environment
 
+pub trait EqIgnoringLoc {
+    fn eq_ignoring_loc(&self, other: &Self) -> bool;
+}
+
+impl<T: EqIgnoringLoc> EqIgnoringLoc for Vec<T> {
+    fn eq_ignoring_loc(&self, other: &Self) -> bool {
+        self.len() == other.len()
+            && self
+                .iter()
+                .zip(other.iter())
+                .all(|(a, b)| a.eq_ignoring_loc(b))
+    }
+}
+
 /// Represents a type parameter.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct TypeParameter(pub Symbol, pub TypeParameterKind);
+pub struct TypeParameter(pub Symbol, pub TypeParameterKind, pub Loc);
+
+impl EqIgnoringLoc for TypeParameter {
+    /// equal ignoring Loc
+    fn eq_ignoring_loc(&self, other: &Self) -> bool {
+        self.0 == other.0 && self.1 == other.1
+    }
+}
 
 impl TypeParameter {
     /// Creates a new type parameter of given name.
-    pub fn new_named(sym: &Symbol) -> Self {
-        Self(*sym, TypeParameterKind::default())
+    pub fn new_named(sym: &Symbol, loc: &Loc) -> Self {
+        Self(*sym, TypeParameterKind::default(), loc.clone())
     }
 
     /// Turns an ordered list of type parameters into a vector of type parameters
@@ -3298,9 +3407,11 @@ impl TypeParameter {
             .collect()
     }
 
-    pub fn from_symbols<'a>(symbols: impl Iterator<Item = &'a Symbol>) -> Vec<TypeParameter> {
+    pub fn from_symbols<'a>(
+        symbols: impl Iterator<Item = &'a (Symbol, Loc)>,
+    ) -> Vec<TypeParameter> {
         symbols
-            .map(|name| TypeParameter(*name, TypeParameterKind::default()))
+            .map(|(name, loc)| TypeParameter(*name, TypeParameterKind::default(), loc.clone()))
             .collect()
     }
 }
@@ -3337,7 +3448,14 @@ impl Default for TypeParameterKind {
 
 /// Represents a parameter.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Parameter(pub Symbol, pub Type);
+pub struct Parameter(pub Symbol, pub Type, pub Loc);
+
+impl EqIgnoringLoc for Parameter {
+    /// equal ignoring Loc
+    fn eq_ignoring_loc(&self, other: &Self) -> bool {
+        self.0 == other.0 && self.1 == other.1
+    }
+}
 
 #[derive(Debug)]
 pub struct FunctionData {
@@ -3346,6 +3464,9 @@ pub struct FunctionData {
 
     /// Location of this function.
     pub(crate) loc: Loc,
+
+    /// Location of the function identifier, suitable for error messages alluding to the function.
+    pub(crate) id_loc: Loc,
 
     /// The definition index of this function in its bytecode module, if a bytecode module
     /// is attached to the parent module data.
@@ -3384,7 +3505,7 @@ pub struct FunctionData {
 
     /// Optional definition associated with this function. The definition is available if
     /// the model is build with option `ModelBuilderOptions::compile_via_model`.
-    pub(crate) def: RefCell<Option<Exp>>,
+    pub(crate) def: Option<Exp>,
 
     /// A cache for the called functions.
     pub(crate) called_funs: Option<BTreeSet<QualifiedId<FunId>>>,
@@ -3478,6 +3599,11 @@ impl<'env> FunctionEnv<'env> {
     /// Returns the location of this function.
     pub fn get_loc(&self) -> Loc {
         self.data.loc.clone()
+    }
+
+    /// Returns the location of the function identifier.
+    pub fn get_id_loc(&self) -> Loc {
+        self.data.id_loc.clone()
     }
 
     /// Returns the attributes of this function.
@@ -3728,7 +3854,7 @@ impl<'env> FunctionEnv<'env> {
     pub fn is_mutating(&self) -> bool {
         self.get_parameters()
             .iter()
-            .any(|Parameter(_, ty)| ty.is_mutable_reference())
+            .any(|Parameter(_, ty, _)| ty.is_mutable_reference())
     }
 
     /// Returns the name of the friend(the only allowed caller) of this function, if there is one.
@@ -3788,7 +3914,7 @@ impl<'env> FunctionEnv<'env> {
     pub fn get_parameter_types(&self) -> Vec<Type> {
         self.get_parameters()
             .into_iter()
-            .map(|Parameter(_, ty)| ty)
+            .map(|Parameter(_, ty, _)| ty)
             .collect()
     }
 
@@ -3906,13 +4032,8 @@ impl<'env> FunctionEnv<'env> {
 
     /// Returns associated definition. The definition of the function, in Exp form, is available
     /// if the model is build with `ModelBuilderOptions::compile_via_model`
-    pub fn get_def(&'env self) -> Ref<Option<Exp>> {
-        self.data.def.borrow()
-    }
-
-    /// Replaces mutable reference to associated definition, allowing modification.
-    pub fn get_mut_def(&'env self) -> RefMut<Option<Exp>> {
-        self.data.def.borrow_mut()
+    pub fn get_def(&self) -> Option<&Exp> {
+        self.data.def.as_ref()
     }
 
     /// Returns the acquired global resource types, if a bytecode module is attached.
@@ -3943,7 +4064,7 @@ impl<'env> FunctionEnv<'env> {
                 let type_name = mid.qualified(sid);
                 modify_targets
                     .entry(type_name)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(target.clone());
             });
         }

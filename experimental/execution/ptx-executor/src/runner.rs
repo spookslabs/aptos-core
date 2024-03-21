@@ -14,9 +14,8 @@ use crate::{
 };
 use aptos_logger::trace;
 use aptos_metrics_core::TimerHelper;
-use aptos_state_view::StateView;
 use aptos_types::{
-    state_store::{state_key::StateKey, state_value::StateValue},
+    state_store::{state_key::StateKey, state_value::StateValue, StateView},
     transaction::signature_verified_transaction::SignatureVerifiedTransaction,
     write_set::TransactionWrite,
 };
@@ -236,7 +235,10 @@ impl<'scope, 'view: 'scope, BaseView: StateView + Sync> Worker<'view, BaseView> 
         // TODO(ptx): maybe warm up vm like done in AptosExecutorTask
         let vm = {
             let _timer = PER_WORKER_TIMER.timer_with(&[&idx, "vm_init"]);
-            AptosVM::new(&self.base_view.as_move_resolver())
+            AptosVM::new(
+                &self.base_view.as_move_resolver(),
+                /*override_is_delayed_field_optimization_capable=*/ None,
+            )
         };
 
         loop {

@@ -101,8 +101,6 @@
 //!             +-----------------------------+
 //! ```
 
-#[cfg(test)]
-mod tests;
 #[macro_use]
 pub mod counters;
 pub mod data_cache;
@@ -111,6 +109,7 @@ pub mod aptos_vm;
 pub mod block_executor;
 mod errors;
 mod gas;
+mod keyless_validation;
 pub mod move_vm_ext;
 pub mod natives;
 pub mod sharded_block_executor;
@@ -118,15 +117,16 @@ pub mod system_module_names;
 pub mod testing;
 pub mod transaction_metadata;
 mod transaction_validation;
+pub mod validator_txns;
 pub mod verifier;
 
 pub use crate::aptos_vm::{AptosSimulationVM, AptosVM};
 use crate::sharded_block_executor::{executor_client::ExecutorClient, ShardedBlockExecutor};
-use aptos_state_view::StateView;
 use aptos_types::{
     block_executor::{
         config::BlockExecutorConfigFromOnchain, partitioner::PartitionedTransactions,
     },
+    state_store::StateView,
     transaction::{
         signature_verified_transaction::SignatureVerifiedTransaction, BlockOutput,
         SignedTransaction, TransactionOutput, VMValidatorResult,

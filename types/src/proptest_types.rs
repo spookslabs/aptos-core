@@ -12,8 +12,10 @@ use crate::{
     aggregate_signature::PartialSignatures,
     block_info::{BlockInfo, Round},
     block_metadata::BlockMetadata,
+    block_metadata_ext::BlockMetadataExt,
     chain_id::ChainId,
     contract_event::ContractEvent,
+    dkg::{DKGTranscript, DKGTranscriptMetadata},
     epoch_state::EpochState,
     event::{EventHandle, EventKey},
     ledger_info::{generate_ledger_info_with_sig, LedgerInfo, LedgerInfoWithSignatures},
@@ -21,14 +23,14 @@ use crate::{
     proof::TransactionInfoListWithProof,
     state_store::{state_key::StateKey, state_value::StateValue},
     transaction::{
-        ChangeSet, ExecutionStatus, Module, ModuleBundle, RawTransaction, Script,
-        SignatureCheckedTransaction, SignedTransaction, Transaction, TransactionArgument,
-        TransactionInfo, TransactionListWithProof, TransactionPayload, TransactionStatus,
-        TransactionToCommit, Version, WriteSetPayload,
+        ChangeSet, ExecutionStatus, Module, RawTransaction, Script, SignatureCheckedTransaction,
+        SignedTransaction, Transaction, TransactionArgument, TransactionInfo,
+        TransactionListWithProof, TransactionPayload, TransactionStatus, TransactionToCommit,
+        Version, WriteSetPayload,
     },
     validator_info::ValidatorInfo,
     validator_signer::ValidatorSigner,
-    validator_txn::{DummyValidatorTransaction, ValidatorTransaction},
+    validator_txn::ValidatorTransaction,
     validator_verifier::{ValidatorConsensusInfo, ValidatorVerifier},
     vm_status::VMStatus,
     write_set::{WriteOp, WriteSet, WriteSetMut},
@@ -365,15 +367,9 @@ fn new_raw_transaction(
 ) -> RawTransaction {
     let chain_id = ChainId::test();
     match payload {
-        TransactionPayload::ModuleBundle(module) => RawTransaction::new_module_bundle(
-            sender,
-            sequence_number,
-            module,
-            max_gas_amount,
-            gas_unit_price,
-            expiration_time_secs,
-            chain_id,
-        ),
+        TransactionPayload::ModuleBundle(_) => {
+            unreachable!("Module bundle payload has been removed")
+        },
         TransactionPayload::Script(script) => RawTransaction::new_script(
             sender,
             sequence_number,
@@ -420,12 +416,6 @@ impl SignatureCheckedTransaction {
         keypair_strategy: impl Strategy<Value = KeyPair<Ed25519PrivateKey, Ed25519PublicKey>>,
     ) -> impl Strategy<Value = Self> {
         Self::strategy_impl(keypair_strategy, TransactionPayload::script_strategy())
-    }
-
-    pub fn module_strategy(
-        keypair_strategy: impl Strategy<Value = KeyPair<Ed25519PrivateKey, Ed25519PublicKey>>,
-    ) -> impl Strategy<Value = Self> {
-        Self::strategy_impl(keypair_strategy, TransactionPayload::module_strategy())
     }
 
     fn strategy_impl(
@@ -482,6 +472,7 @@ impl Arbitrary for SignatureCheckedTransaction {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(_args: ()) -> Self::Strategy {
+        // Right now only script transaction payloads are generated!
         Self::strategy_impl(ed25519::keypair_strategy(), any::<TransactionPayload>()).boxed()
     }
 }
@@ -501,11 +492,6 @@ impl Arbitrary for SignedTransaction {
 impl TransactionPayload {
     pub fn script_strategy() -> impl Strategy<Value = Self> {
         any::<Script>().prop_map(TransactionPayload::Script)
-    }
-
-    pub fn module_strategy() -> impl Strategy<Value = Self> {
-        any::<Module>()
-            .prop_map(|module| TransactionPayload::ModuleBundle(ModuleBundle::from(module)))
     }
 }
 
@@ -535,12 +521,8 @@ impl Arbitrary for TransactionPayload {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(_args: ()) -> Self::Strategy {
-        // Most transactions in practice will be programs, but other parts of the system should
-        // at least not choke on write set strategies so introduce them with decent probability.
-        // The figures below are probability weights.
         prop_oneof![
             4 => Self::script_strategy(),
-            1 => Self::module_strategy(),
         ]
         .boxed()
     }
@@ -974,6 +956,46 @@ impl Arbitrary for BlockMetadata {
     }
 }
 
+impl Arbitrary for BlockMetadataExt {
+    type Parameters = SizeRange;
+    type Strategy = BoxedStrategy<Self>;
+
+    fn arbitrary_with(num_validators_range: Self::Parameters) -> Self::Strategy {
+        (
+            any::<HashValue>(),
+            any::<u64>(),
+            any::<u64>(),
+            any::<AccountAddress>(),
+            prop::collection::vec(any::<u8>(), num_validators_range.clone()),
+            prop::collection::vec(any::<u32>(), num_validators_range),
+            any::<u64>(),
+        )
+            .prop_map(
+                |(
+                    id,
+                    epoch,
+                    round,
+                    proposer,
+                    previous_block_votes,
+                    failed_proposer_indices,
+                    timestamp,
+                )| {
+                    BlockMetadataExt::new_v1(
+                        id,
+                        epoch,
+                        round,
+                        proposer,
+                        previous_block_votes,
+                        failed_proposer_indices,
+                        timestamp,
+                        None,
+                    )
+                },
+            )
+            .boxed()
+    }
+}
+
 #[derive(Debug)]
 struct ValidatorSetGen {
     validators: Vec<Index>,
@@ -1221,10 +1243,14 @@ impl Arbitrary for ValidatorTransaction {
     type Strategy = BoxedStrategy<Self>;
 
     fn arbitrary_with(_args: Self::Parameters) -> Self::Strategy {
-        Just(Value::Null)
-            .prop_map(|_| {
-                ValidatorTransaction::DummyTopic(DummyValidatorTransaction {
-                    payload: vec![0xFF; 16],
+        (any::<Vec<u8>>())
+            .prop_map(|payload| {
+                ValidatorTransaction::DKGResult(DKGTranscript {
+                    metadata: DKGTranscriptMetadata {
+                        epoch: 0,
+                        author: AccountAddress::ZERO,
+                    },
+                    transcript_bytes: payload,
                 })
             })
             .boxed()

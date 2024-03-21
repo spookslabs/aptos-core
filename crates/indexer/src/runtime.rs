@@ -10,6 +10,7 @@ use crate::{
 };
 use aptos_api::context::Context;
 use aptos_config::config::{IndexerConfig, NodeConfig};
+use aptos_db_indexer::table_info_reader::TableInfoReader;
 use aptos_logger::{error, info};
 use aptos_mempool::MempoolClientSender;
 use aptos_storage_interface::DbReader;
@@ -19,8 +20,6 @@ use std::{collections::VecDeque, sync::Arc};
 use tokio::runtime::{Builder, Runtime};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message, accept_async};
 use futures::{StreamExt, TryStreamExt, TryFutureExt, SinkExt, Stream, FutureExt};
-
-const ENDPOINT: &str = "http://127.0.0.1:34789/aptos";
 
 const WEBSOCKET_ENDPOINT: &str = "ws://127.0.0.1:34788/sync";
 
@@ -38,7 +37,7 @@ pub fn bootstrap(
     config: &NodeConfig,
     chain_id: ChainId,
     db: Arc<dyn DbReader>,
-    mp_sender: MempoolClientSender,
+    mp_sender: MempoolClientSender
 ) -> Option<anyhow::Result<Runtime>> {
     if !config.indexer.enabled {
         return None;
@@ -55,7 +54,7 @@ pub fn bootstrap(
     let node_config = config.clone();
 
     runtime.spawn(async move {
-        let context = Arc::new(Context::new(chain_id, db, mp_sender, node_config));
+        let context = Arc::new(Context::new(chain_id, db, mp_sender, node_config, None));
         run_forever(indexer_config, context).await;
     });
 

@@ -2,6 +2,7 @@
 // Parts of the project are originally copyright © Meta Platforms, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::WaypointConfig;
 use crate::config::{
     config_sanitizer::ConfigSanitizer, node_config_loader::NodeType,
     transaction_filter_type::Filter, utils::RootPath, Error, NodeConfig,
@@ -15,6 +16,7 @@ use std::{
 };
 
 const GENESIS_DEFAULT: &str = "genesis.blob";
+pub const DEFAULT_CONCURRENCY_LEVEL: u16 = 32;
 
 #[derive(Clone, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(default, deny_unknown_fields)]
@@ -24,18 +26,23 @@ pub struct ExecutionConfig {
     pub genesis: Option<Transaction>,
     /// Location of the genesis file
     pub genesis_file_location: PathBuf,
-    /// Number of threads to run execution
+    /// Number of threads to run execution.
+    /// If 0, we use min of (num of cores/2, DEFAULT_CONCURRENCY_LEVEL) as default concurrency level
     pub concurrency_level: u16,
     /// Number of threads to read proofs
     pub num_proof_reading_threads: u16,
     /// Enables paranoid mode for types, which adds extra runtime VM checks
     pub paranoid_type_verification: bool,
+    /// Enabled discarding blocks that fail execution due to BlockSTM/VM issue.
+    pub discard_failed_blocks: bool,
     /// Enables paranoid mode for hot potatoes, which adds extra runtime VM checks
     pub paranoid_hot_potato_verification: bool,
     /// Enables enhanced metrics around processed transactions
     pub processed_transactions_detailed_counters: bool,
     /// Enables filtering of transactions before they are sent to execution
     pub transaction_filter: Filter,
+    /// Used during DB bootstrapping
+    pub genesis_waypoint: Option<WaypointConfig>,
 }
 
 impl std::fmt::Debug for ExecutionConfig {
@@ -59,13 +66,15 @@ impl Default for ExecutionConfig {
         ExecutionConfig {
             genesis: None,
             genesis_file_location: PathBuf::new(),
-            // Parallel execution by default.
-            concurrency_level: 8,
+            // use min of (num of cores/2, DEFAULT_CONCURRENCY_LEVEL) as default concurrency level
+            concurrency_level: 0,
             num_proof_reading_threads: 32,
-            paranoid_type_verification: false,
-            paranoid_hot_potato_verification: false,
+            paranoid_type_verification: true,
+            paranoid_hot_potato_verification: true,
+            discard_failed_blocks: false,
             processed_transactions_detailed_counters: false,
             transaction_filter: Filter::empty(),
+            genesis_waypoint: None,
         }
     }
 }
@@ -130,10 +139,32 @@ impl ExecutionConfig {
 
 impl ConfigSanitizer for ExecutionConfig {
     fn sanitize(
-        _node_config: &NodeConfig,
+        node_config: &NodeConfig,
         _node_type: NodeType,
-        _chain_id: Option<ChainId>,
+        chain_id: Option<ChainId>,
     ) -> Result<(), Error> {
+        let sanitizer_name = Self::get_sanitizer_name();
+        let execution_config = &node_config.execution;
+
+        // If this is a mainnet node, ensure that additional verifiers are enabled
+        if let Some(chain_id) = chain_id {
+            if chain_id.is_mainnet() {
+                if !execution_config.paranoid_hot_potato_verification {
+                    return Err(Error::ConfigSanitizerFailed(
+                        sanitizer_name,
+                        "paranoid_hot_potato_verification must be enabled for mainnet nodes!"
+                            .into(),
+                    ));
+                }
+                if !execution_config.paranoid_type_verification {
+                    return Err(Error::ConfigSanitizerFailed(
+                        sanitizer_name,
+                        "paranoid_type_verification must be enabled for mainnet nodes!".into(),
+                    ));
+                }
+            }
+        }
+
         Ok(())
     }
 }
@@ -162,6 +193,44 @@ mod test {
         // Sanitize the config and verify that it succeeds
         ExecutionConfig::sanitize(&node_config, NodeType::Validator, Some(ChainId::mainnet()))
             .unwrap();
+    }
+
+    #[test]
+    fn test_sanitize_hot_potato_mainnet() {
+        // Create a node config with missing paranoid_hot_potato_verification on mainnet
+        let node_config = NodeConfig {
+            execution: ExecutionConfig {
+                paranoid_hot_potato_verification: false,
+                paranoid_type_verification: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        // Sanitize the config and verify that it fails
+        let error =
+            ExecutionConfig::sanitize(&node_config, NodeType::Validator, Some(ChainId::mainnet()))
+                .unwrap_err();
+        assert!(matches!(error, Error::ConfigSanitizerFailed(_, _)));
+    }
+
+    #[test]
+    fn test_sanitize_paranoid_type_mainnet() {
+        // Create a node config with missing paranoid_type_verification on mainnet
+        let node_config = NodeConfig {
+            execution: ExecutionConfig {
+                paranoid_hot_potato_verification: true,
+                paranoid_type_verification: false,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        // Sanitize the config and verify that it fails
+        let error =
+            ExecutionConfig::sanitize(&node_config, NodeType::Validator, Some(ChainId::mainnet()))
+                .unwrap_err();
+        assert!(matches!(error, Error::ConfigSanitizerFailed(_, _)));
     }
 
     #[test]

@@ -25,12 +25,14 @@ use aptos_consensus_types::{
 };
 use aptos_crypto::HashValue;
 use aptos_logger::prelude::*;
+use aptos_network::protocols::{rpc::error::RpcError, wire::handshake::v1::ProtocolId};
 use aptos_reliable_broadcast::{DropGuard, ReliableBroadcast};
 use aptos_time_service::TimeService;
 use aptos_types::{
     account_address::AccountAddress, epoch_change::EpochChangeProof, epoch_state::EpochState,
     ledger_info::LedgerInfoWithSignatures,
 };
+use bytes::Bytes;
 use futures::{
     channel::{
         mpsc::{unbounded, UnboundedReceiver, UnboundedSender},
@@ -54,9 +56,14 @@ pub const LOOP_INTERVAL_MS: u64 = 1500;
 #[derive(Debug, Default)]
 pub struct ResetAck {}
 
+pub enum ResetSignal {
+    Stop,
+    TargetRound(u64),
+}
+
 pub struct ResetRequest {
     pub tx: oneshot::Sender<ResetAck>,
-    pub stop: bool,
+    pub signal: ResetSignal,
 }
 
 pub struct OrderedBlocks {
@@ -121,6 +128,7 @@ pub struct BufferManager {
     end_epoch_timestamp: OnceCell<u64>,
     previous_commit_time: Instant,
     reset_flag: Arc<AtomicBool>,
+    bounded_executor: BoundedExecutor,
 }
 
 impl BufferManager {
@@ -144,6 +152,7 @@ impl BufferManager {
         epoch_state: Arc<EpochState>,
         ongoing_tasks: Arc<AtomicU64>,
         reset_flag: Arc<AtomicBool>,
+        executor: BoundedExecutor,
     ) -> Self {
         let buffer = Buffer::<BufferItem>::new();
 
@@ -171,6 +180,7 @@ impl BufferManager {
                 rb_backoff_policy,
                 TimeService::real(),
                 Duration::from_millis(COMMIT_VOTE_BROADCAST_INTERVAL_MS),
+                executor.clone(),
             ),
             commit_proof_rb_handle: None,
             commit_msg_tx,
@@ -187,6 +197,7 @@ impl BufferManager {
             end_epoch_timestamp: OnceCell::new(),
             previous_commit_time: Instant::now(),
             reset_flag,
+            bounded_executor: executor,
         }
     }
 
@@ -344,17 +355,7 @@ impl BufferManager {
                     self.commit_proof_rb_handle
                         .replace(self.do_reliable_broadcast(commit_decision));
                 }
-                if aggregated_item.commit_proof.ledger_info().ends_epoch() {
-                    self.commit_msg_tx
-                        .send_epoch_change(EpochChangeProof::new(
-                            vec![aggregated_item.commit_proof.clone()],
-                            false,
-                        ))
-                        .await;
-                    // the epoch ends, reset to avoid executing more blocks, execute after
-                    // this persisting request will result in BlockNotFound
-                    self.reset().await;
-                }
+                let commit_proof = aggregated_item.commit_proof.clone();
                 self.persisting_phase_tx
                     .send(self.create_new_request(PersistingRequest {
                         blocks: blocks_to_persist,
@@ -369,6 +370,15 @@ impl BufferManager {
                     }))
                     .await
                     .expect("Failed to send persist request");
+                // this needs to be done after creating the persisting request to avoid it being lost
+                if commit_proof.ledger_info().ends_epoch() {
+                    self.commit_msg_tx
+                        .send_epoch_change(EpochChangeProof::new(vec![commit_proof], false))
+                        .await;
+                    // the epoch ends, reset to avoid executing more blocks, execute after
+                    // this persisting request will result in BlockNotFound
+                    self.reset().await;
+                }
                 info!("Advance head to {:?}", self.buffer.head_cursor());
                 self.previous_commit_time = Instant::now();
                 return;
@@ -396,11 +406,11 @@ impl BufferManager {
 
     /// It pops everything in the buffer and if reconfig flag is set, it stops the main loop
     async fn process_reset_request(&mut self, request: ResetRequest) {
-        let ResetRequest { tx, stop } = request;
+        let ResetRequest { tx, signal } = request;
         info!("Receive reset");
         self.reset_flag.store(true, Ordering::SeqCst);
 
-        self.stop = stop;
+        self.stop = matches!(signal, ResetSignal::Stop);
         self.reset().await;
         let _ = tx.send(ResetAck::default());
         self.reset_flag.store(false, Ordering::SeqCst);
@@ -569,13 +579,18 @@ impl BufferManager {
                                 commit_info = commit_info,
                                 "Failed to add commit vote",
                             );
+                            reply_nack(protocol, response_sender);
                             item
                         },
                     };
                     self.buffer.set(&current_cursor, new_item);
                     if self.buffer.get(&current_cursor).is_aggregated() {
                         return Some(target_block_id);
+                    } else {
+                        return None;
                     }
+                } else {
+                    reply_nack(protocol, response_sender); // TODO: send_commit_vote() doesn't care about the response and this should be direct send not RPC
                 }
             },
             CommitMessage::Decision(commit_proof) => {
@@ -603,10 +618,14 @@ impl BufferManager {
                         return Some(target_block_id);
                     }
                 }
+                reply_nack(protocol, response_sender); // TODO: send_commit_proof() doesn't care about the response and this should be direct send not RPC
             },
             CommitMessage::Ack(_) => {
                 // It should be filtered out by verify, so we log errors here
                 error!("Unexpected ack message");
+            },
+            CommitMessage::Nack => {
+                error!("Unexpected NACK message");
             },
         }
         None
@@ -694,12 +713,13 @@ impl BufferManager {
             .set(pending_aggregated as i64);
     }
 
-    pub async fn start(mut self, bounded_executor: BoundedExecutor) {
+    pub async fn start(mut self) {
         info!("Buffer manager starts.");
         let (verified_commit_msg_tx, mut verified_commit_msg_rx) = create_channel();
         let mut interval = tokio::time::interval(Duration::from_millis(LOOP_INTERVAL_MS));
         let mut commit_msg_rx = self.commit_msg_rx.take().expect("commit msg rx must exist");
         let epoch_state = self.epoch_state.clone();
+        let bounded_executor = self.bounded_executor.clone();
         spawn_named!("buffer manager verification", async move {
             while let Some(commit_msg) = commit_msg_rx.next().await {
                 let tx = verified_commit_msg_tx.clone();
@@ -770,5 +790,12 @@ impl BufferManager {
             }
         }
         info!("Buffer manager stops.");
+    }
+}
+
+fn reply_nack(protocol: ProtocolId, response_sender: oneshot::Sender<Result<Bytes, RpcError>>) {
+    let response = ConsensusMsg::CommitMessage(Box::new(CommitMessage::Nack));
+    if let Ok(bytes) = protocol.to_bytes(&response) {
+        let _ = response_sender.send(Ok(bytes.into()));
     }
 }

@@ -17,6 +17,7 @@ anyhow = { workspace = true }
 aptos-bitvec = { workspace = true }
 aptos-bounded-executor = { workspace = true }
 aptos-channels = { workspace = true }
+aptos-collections = { workspace = true }
 aptos-config = { workspace = true }
 aptos-consensus-notifications = { workspace = true }
 aptos-consensus-types = { workspace = true }
@@ -44,6 +45,7 @@ aptos-storage-interface = { workspace = true }
 aptos-temppath = { workspace = true }
 aptos-time-service = { workspace = true }
 aptos-types = { workspace = true }
+aptos-validator-transaction-pool = { workspace = true }
 aptos-vm = { workspace = true }
 arc-swap = { workspace = true }
 async-trait = { workspace = true }
@@ -96,5 +98,12 @@ tempfile = { workspace = true }
 
 [features]
 default = []
-fuzzing = ["aptos-consensus-types/fuzzing", "aptos-config/fuzzing", "aptos-crypto/fuzzing", "aptos-mempool/fuzzing", "aptos-types/fuzzing", "aptos-safety-rules/testing"]
+fuzzing = [
+    "aptos-consensus-types/fuzzing",
+    "aptos-config/fuzzing",
+    "aptos-crypto/fuzzing",
+    "aptos-mempool/fuzzing",
+    "aptos-types/fuzzing",
+    "aptos-safety-rules/testing",
+]
 failpoints = ["fail/failpoints"]

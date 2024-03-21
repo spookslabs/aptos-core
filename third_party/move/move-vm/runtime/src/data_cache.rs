@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::loader::Loader;
+use crate::loader::{Loader, ModuleStorageAdapter};
 use bytes::Bytes;
 use move_binary_format::errors::*;
 use move_core_types::{
@@ -18,6 +18,7 @@ use move_core_types::{
 };
 use move_vm_types::{
     loaded_data::runtime_types::Type,
+    value_serde::deserialize_and_allow_delayed_values,
     values::{GlobalValue, Value},
 };
 use std::collections::btree_map::BTreeMap;
@@ -52,14 +53,14 @@ impl AccountDataCache {
 /// for a data store related to a transaction. Clients should create an instance of this type
 /// and pass it to the Move VM.
 pub(crate) struct TransactionDataCache<'r> {
-    remote: &'r dyn MoveResolver,
+    remote: &'r dyn MoveResolver<PartialVMError>,
     account_map: BTreeMap<AccountAddress, AccountDataCache>,
 }
 
 impl<'r> TransactionDataCache<'r> {
     /// Create a `TransactionDataCache` with a `RemoteCache` that provides access to data
     /// not updated in the transaction.
-    pub(crate) fn new(remote: &'r dyn MoveResolver) -> Self {
+    pub(crate) fn new(remote: &'r impl MoveResolver<PartialVMError>) -> Self {
         TransactionDataCache {
             remote,
             account_map: BTreeMap::new(),
@@ -162,6 +163,7 @@ impl<'r> TransactionDataCache<'r> {
         loader: &Loader,
         addr: AccountAddress,
         ty: &Type,
+        module_store: &ModuleStorageAdapter,
     ) -> PartialVMResult<(&mut GlobalValue, Option<NumBytes>)> {
         let account_cache = Self::get_mut_or_insert_with(&mut self.account_map, &addr, || {
             (addr, AccountDataCache::new())
@@ -179,9 +181,9 @@ impl<'r> TransactionDataCache<'r> {
             };
             // TODO(Gas): Shall we charge for this?
             let (ty_layout, has_aggregator_lifting) =
-                loader.type_to_type_layout_with_identifier_mappings(ty)?;
+                loader.type_to_type_layout_with_identifier_mappings(ty, module_store)?;
 
-            let module = loader.get_module(&ty_tag.module_id());
+            let module = module_store.module_at(&ty_tag.module_id());
             let metadata: &[Metadata] = match &module {
                 Some(module) => &module.module().metadata,
                 None => &[],
@@ -190,7 +192,7 @@ impl<'r> TransactionDataCache<'r> {
             // If we need to process aggregator lifting, we pass type layout to remote.
             // Remote, in turn ensures that all aggregator values are lifted if the resolved
             // resource comes from storage.
-            let resolved_result = self.remote.get_resource_bytes_with_metadata_and_layout(
+            let (data, bytes_loaded) = self.remote.get_resource_bytes_with_metadata_and_layout(
                 &addr,
                 &ty_tag,
                 metadata,
@@ -199,19 +201,12 @@ impl<'r> TransactionDataCache<'r> {
                 } else {
                     None
                 },
-            );
-
-            // TODO[agg_v2](fix) We need to propagate errors better, and handle them differently based on:
-            // - DELAYED_FIELDS_CODE_INVARIANT_ERROR, SPECULATIVE_EXECUTION_ABORT_ERROR or other.
-            let (data, bytes_loaded) = resolved_result.map_err(|err| {
-                let msg = format!("Unexpected storage error: {:?}", err);
-                PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(msg)
-            })?;
+            )?;
             load_res = Some(NumBytes::new(bytes_loaded as u64));
 
             let gv = match data {
                 Some(blob) => {
-                    let val = match Value::simple_deserialize(&blob, &ty_layout) {
+                    let val = match deserialize_and_allow_delayed_values(&blob, &ty_layout) {
                         Some(val) => val,
                         None => {
                             let msg =
@@ -243,26 +238,20 @@ impl<'r> TransactionDataCache<'r> {
         ))
     }
 
-    pub(crate) fn load_module(&self, module_id: &ModuleId) -> VMResult<Bytes> {
+    pub(crate) fn load_module(&self, module_id: &ModuleId) -> PartialVMResult<Bytes> {
         if let Some(account_cache) = self.account_map.get(module_id.address()) {
             if let Some((blob, _is_republishing)) = account_cache.module_map.get(module_id.name()) {
                 return Ok(blob.clone());
             }
         }
-        match self.remote.get_module(module_id) {
-            Ok(Some(bytes)) => Ok(bytes),
-            Ok(None) => Err(PartialVMError::new(StatusCode::LINKER_ERROR)
-                .with_message(format!(
+        match self.remote.get_module(module_id)? {
+            Some(bytes) => Ok(bytes),
+            None => Err(
+                PartialVMError::new(StatusCode::LINKER_ERROR).with_message(format!(
                     "Linker Error: Cannot find {:?} in data cache",
                     module_id
-                ))
-                .finish(Location::Undefined)),
-            Err(err) => {
-                let msg = format!("Unexpected storage error: {:?}", err);
-                Err(PartialVMError::new(StatusCode::STORAGE_ERROR)
-                    .with_message(msg)
-                    .finish(Location::Undefined))
-            },
+                )),
+            ),
         }
     }
 
@@ -293,9 +282,7 @@ impl<'r> TransactionDataCache<'r> {
         Ok(self
             .remote
             .get_module(module_id)
-            .map_err(|_| {
-                PartialVMError::new(StatusCode::STORAGE_ERROR).finish(Location::Undefined)
-            })?
+            .map_err(|e| e.finish(Location::Undefined))?
             .is_some())
     }
 }

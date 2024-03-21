@@ -7,16 +7,13 @@
 /// and this file will be moved to /ecosystem/indexer-grpc/indexer-grpc-table-info.
 use crate::{
     metadata::{MetadataKey, MetadataValue},
-    schema::{
-        column_families, indexer_metadata::IndexerMetadataSchema, table_info::TableInfoSchema,
-    },
+    schema::{indexer_metadata::IndexerMetadataSchema, table_info::TableInfoSchema},
 };
-use anyhow::{bail, Result};
-use aptos_config::config::RocksdbConfig;
 use aptos_logger::info;
-use aptos_rocksdb_options::gen_rocksdb_options;
 use aptos_schemadb::{SchemaBatch, DB};
-use aptos_storage_interface::{state_view::DbStateView, DbReader};
+use aptos_storage_interface::{
+    db_other_bail as bail, state_view::DbStateViewAtVersion, AptosDbError, DbReader, Result,
+};
 use aptos_types::{
     access_path::Path,
     account_address::AccountAddress,
@@ -33,11 +30,13 @@ use dashmap::{DashMap, DashSet};
 use move_core_types::{
     ident_str,
     language_storage::{StructTag, TypeTag},
-    resolver::MoveResolver,
+    resolver::ModuleResolver,
 };
 use move_resource_viewer::{AnnotatedMoveValue, MoveValueAnnotator};
 use std::{
     collections::{BTreeMap, HashMap},
+    fs,
+    path::PathBuf,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -45,12 +44,11 @@ use std::{
     time::Duration,
 };
 
-pub const INDEX_ASYNC_V2_DB_NAME: &str = "index_indexer_async_v2_db";
 const TABLE_INFO_RETRY_TIME_MILLIS: u64 = 10;
 
 #[derive(Debug)]
 pub struct IndexerAsyncV2 {
-    db: DB,
+    pub db: DB,
     // Next version to be processed
     next_version: AtomicU64,
     // It is used in the context of processing write ops and extracting table information.
@@ -64,21 +62,7 @@ pub struct IndexerAsyncV2 {
 }
 
 impl IndexerAsyncV2 {
-    /// Opens up this rocksdb to get ready for read and write when bootstraping the aptosdb
-    pub fn open(
-        db_root_path: impl AsRef<std::path::Path>,
-        rocksdb_config: RocksdbConfig,
-        pending_on: DashMap<TableHandle, DashSet<Bytes>>,
-    ) -> Result<Self> {
-        let db_path = db_root_path.as_ref().join(INDEX_ASYNC_V2_DB_NAME);
-
-        let db = DB::open(
-            db_path,
-            "index_asnync_v2_db",
-            column_families(),
-            &gen_rocksdb_options(&rocksdb_config, false),
-        )?;
-
+    pub fn new(db: DB) -> Result<Self> {
         let next_version = db
             .get::<IndexerMetadataSchema>(&MetadataKey::LatestVersion)?
             .map_or(0, |v| v.expect_version());
@@ -86,7 +70,7 @@ impl IndexerAsyncV2 {
         Ok(Self {
             db,
             next_version: AtomicU64::new(next_version),
-            pending_on,
+            pending_on: DashMap::new(),
         })
     }
 
@@ -98,10 +82,7 @@ impl IndexerAsyncV2 {
         end_early_if_pending_on_empty: bool,
     ) -> Result<()> {
         let last_version = first_version + write_sets.len() as Version;
-        let state_view = DbStateView {
-            db: db_reader,
-            version: Some(last_version),
-        };
+        let state_view = db_reader.state_view_at_version(Some(last_version))?;
         let resolver = state_view.as_move_resolver();
         let annotator = MoveValueAnnotator::new(&resolver);
         self.index_with_annotator(
@@ -114,7 +95,7 @@ impl IndexerAsyncV2 {
 
     /// Index write sets with the move annotator to parse obscure table handle and key value types
     /// After the current batch's parsed, write the mapping to the rocksdb, also update the next version to be processed
-    pub fn index_with_annotator<R: MoveResolver>(
+    pub fn index_with_annotator<R: ModuleResolver>(
         &self,
         annotator: &MoveValueAnnotator<R>,
         first_version: Version,
@@ -142,7 +123,7 @@ impl IndexerAsyncV2 {
                     error = ?&err,
                     "[DB] Failed to parse table info"
                 );
-                bail!(err);
+                bail!("{}", err);
             },
         };
         self.db.write_schemas(batch)?;
@@ -150,12 +131,10 @@ impl IndexerAsyncV2 {
     }
 
     pub fn update_next_version(&self, end_version: u64) -> Result<()> {
-        let batch = SchemaBatch::new();
-        batch.put::<IndexerMetadataSchema>(
+        self.db.put::<IndexerMetadataSchema>(
             &MetadataKey::LatestVersion,
             &MetadataValue::Version(end_version - 1),
         )?;
-        self.db.write_schemas(batch)?;
         self.next_version.store(end_version, Ordering::Relaxed);
         Ok(())
     }
@@ -200,11 +179,14 @@ impl IndexerAsyncV2 {
     }
 
     pub fn next_version(&self) -> Version {
-        self.next_version.load(Ordering::Relaxed)
+        self.db
+            .get::<IndexerMetadataSchema>(&MetadataKey::LatestVersion)
+            .unwrap()
+            .map_or(0, |v| v.expect_version())
     }
 
     pub fn get_table_info(&self, handle: TableHandle) -> Result<Option<TableInfo>> {
-        self.db.get::<TableInfoSchema>(&handle)
+        self.db.get::<TableInfoSchema>(&handle).map_err(Into::into)
     }
 
     pub fn get_table_info_with_retry(&self, handle: TableHandle) -> Result<Option<TableInfo>> {
@@ -226,6 +208,11 @@ impl IndexerAsyncV2 {
     pub fn is_indexer_async_v2_pending_on_empty(&self) -> bool {
         self.pending_on.is_empty()
     }
+
+    pub fn create_checkpoint(&self, path: &PathBuf) -> Result<()> {
+        fs::remove_dir_all(path).unwrap_or(());
+        self.db.create_checkpoint(path)
+    }
 }
 
 struct TableInfoParser<'a, R> {
@@ -235,7 +222,7 @@ struct TableInfoParser<'a, R> {
     pending_on: &'a DashMap<TableHandle, DashSet<Bytes>>,
 }
 
-impl<'a, R: MoveResolver> TableInfoParser<'a, R> {
+impl<'a, R: ModuleResolver> TableInfoParser<'a, R> {
     pub fn new(
         indexer_async_v2: &'a IndexerAsyncV2,
         annotator: &'a MoveValueAnnotator<R>,
@@ -293,7 +280,7 @@ impl<'a, R: MoveResolver> TableInfoParser<'a, R> {
             None => {
                 self.pending_on
                     .entry(handle)
-                    .or_insert_with(DashSet::new)
+                    .or_default()
                     .insert(bytes.clone());
             },
         }

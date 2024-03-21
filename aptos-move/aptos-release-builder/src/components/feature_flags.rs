@@ -87,13 +87,23 @@ pub enum FeatureFlag {
     SponsoredAutomaticAccountCreation,
     FeePayerAccountOptional,
     AggregatorV2DelayedFields,
-    ConcurrentAssets,
+    ConcurrentTokenV2,
     LimitMaxIdentifierLength,
     OperatorBeneficiaryChange,
     VMBinaryFormatV7,
-    ResourceGroupsChargeAsSizeSum,
+    ResourceGroupsSplitInVmChangeSet,
     CommissionChangeDelegationPool,
-    BN254Structures,
+    Bn254Structures,
+    WebAuthnSignature,
+    ReconfigureWithDkg,
+    KeylessAccounts,
+    KeylessButZklessAccounts,
+    RemoveDetailedError,
+    JwkConsensus,
+    ConcurrentFungibleAssets,
+    RefundableBytes,
+    ObjectCodeDeployment,
+    MaxObjectNestingCheck,
 }
 
 fn generate_features_blob(writer: &CodeWriter, data: &[u64]) {
@@ -236,16 +246,26 @@ impl From<FeatureFlag> for AptosFeatureFlag {
             FeatureFlag::AggregatorV2DelayedFields => {
                 AptosFeatureFlag::AGGREGATOR_V2_DELAYED_FIELDS
             },
-            FeatureFlag::ConcurrentAssets => AptosFeatureFlag::CONCURRENT_ASSETS,
+            FeatureFlag::ConcurrentTokenV2 => AptosFeatureFlag::CONCURRENT_TOKEN_V2,
             FeatureFlag::LimitMaxIdentifierLength => AptosFeatureFlag::LIMIT_MAX_IDENTIFIER_LENGTH,
             FeatureFlag::OperatorBeneficiaryChange => AptosFeatureFlag::OPERATOR_BENEFICIARY_CHANGE,
-            FeatureFlag::ResourceGroupsChargeAsSizeSum => {
-                AptosFeatureFlag::RESOURCE_GROUPS_CHARGE_AS_SIZE_SUM
+            FeatureFlag::ResourceGroupsSplitInVmChangeSet => {
+                AptosFeatureFlag::RESOURCE_GROUPS_SPLIT_IN_VM_CHANGE_SET
             },
             FeatureFlag::CommissionChangeDelegationPool => {
                 AptosFeatureFlag::COMMISSION_CHANGE_DELEGATION_POOL
             },
-            FeatureFlag::BN254Structures => AptosFeatureFlag::BN254_STRUCTURES,
+            FeatureFlag::Bn254Structures => AptosFeatureFlag::BN254_STRUCTURES,
+            FeatureFlag::WebAuthnSignature => AptosFeatureFlag::WEBAUTHN_SIGNATURE,
+            FeatureFlag::ReconfigureWithDkg => AptosFeatureFlag::RECONFIGURE_WITH_DKG,
+            FeatureFlag::KeylessAccounts => AptosFeatureFlag::KEYLESS_ACCOUNTS,
+            FeatureFlag::KeylessButZklessAccounts => AptosFeatureFlag::KEYLESS_BUT_ZKLESS_ACCOUNTS,
+            FeatureFlag::RemoveDetailedError => AptosFeatureFlag::REMOVE_DETAILED_ERROR_FROM_HASH,
+            FeatureFlag::JwkConsensus => AptosFeatureFlag::JWK_CONSENSUS,
+            FeatureFlag::ConcurrentFungibleAssets => AptosFeatureFlag::CONCURRENT_FUNGIBLE_ASSETS,
+            FeatureFlag::RefundableBytes => AptosFeatureFlag::REFUNDABLE_BYTES,
+            FeatureFlag::ObjectCodeDeployment => AptosFeatureFlag::OBJECT_CODE_DEPLOYMENT,
+            FeatureFlag::MaxObjectNestingCheck => AptosFeatureFlag::MAX_OBJECT_NESTING_CHECK,
         }
     }
 }
@@ -311,16 +331,26 @@ impl From<AptosFeatureFlag> for FeatureFlag {
             AptosFeatureFlag::AGGREGATOR_V2_DELAYED_FIELDS => {
                 FeatureFlag::AggregatorV2DelayedFields
             },
-            AptosFeatureFlag::CONCURRENT_ASSETS => FeatureFlag::ConcurrentAssets,
+            AptosFeatureFlag::CONCURRENT_TOKEN_V2 => FeatureFlag::ConcurrentTokenV2,
             AptosFeatureFlag::LIMIT_MAX_IDENTIFIER_LENGTH => FeatureFlag::LimitMaxIdentifierLength,
             AptosFeatureFlag::OPERATOR_BENEFICIARY_CHANGE => FeatureFlag::OperatorBeneficiaryChange,
-            AptosFeatureFlag::RESOURCE_GROUPS_CHARGE_AS_SIZE_SUM => {
-                FeatureFlag::ResourceGroupsChargeAsSizeSum
+            AptosFeatureFlag::RESOURCE_GROUPS_SPLIT_IN_VM_CHANGE_SET => {
+                FeatureFlag::ResourceGroupsSplitInVmChangeSet
             },
             AptosFeatureFlag::COMMISSION_CHANGE_DELEGATION_POOL => {
                 FeatureFlag::CommissionChangeDelegationPool
             },
-            AptosFeatureFlag::BN254_STRUCTURES => FeatureFlag::BN254Structures,
+            AptosFeatureFlag::BN254_STRUCTURES => FeatureFlag::Bn254Structures,
+            AptosFeatureFlag::WEBAUTHN_SIGNATURE => FeatureFlag::WebAuthnSignature,
+            AptosFeatureFlag::RECONFIGURE_WITH_DKG => FeatureFlag::ReconfigureWithDkg,
+            AptosFeatureFlag::KEYLESS_ACCOUNTS => FeatureFlag::KeylessAccounts,
+            AptosFeatureFlag::KEYLESS_BUT_ZKLESS_ACCOUNTS => FeatureFlag::KeylessButZklessAccounts,
+            AptosFeatureFlag::REMOVE_DETAILED_ERROR_FROM_HASH => FeatureFlag::RemoveDetailedError,
+            AptosFeatureFlag::JWK_CONSENSUS => FeatureFlag::JwkConsensus,
+            AptosFeatureFlag::CONCURRENT_FUNGIBLE_ASSETS => FeatureFlag::ConcurrentFungibleAssets,
+            AptosFeatureFlag::REFUNDABLE_BYTES => FeatureFlag::RefundableBytes,
+            AptosFeatureFlag::OBJECT_CODE_DEPLOYMENT => FeatureFlag::ObjectCodeDeployment,
+            AptosFeatureFlag::MAX_OBJECT_NESTING_CHECK => FeatureFlag::MaxObjectNestingCheck,
         }
     }
 }

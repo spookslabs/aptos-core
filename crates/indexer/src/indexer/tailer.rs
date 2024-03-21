@@ -151,6 +151,24 @@ impl Tailer {
                         }
                     }
 
+					/*for write in &transaction.info.changes {
+						if let WriteSetChange::WriteResource(resource) = write {
+							let typ = &resource.data.typ;
+							let a = typ.address.to_string();
+							let b = typ.module.to_string();
+							let c = typ.name.to_string();
+							if (a == "0xc7efb4076dbe143cbcd98cfaaa929ecfc8f299203dfff63b95ccb6bfe19850fa" && b == "swap" && c == "TokenPairReserve") ||
+								(a == "0x190d44266241744264b964a37b8f09863167a12d3e70cda39376cfb4e3561e12" && b == "liquidity_pool" && c == "LiquidityPool") ||
+								(a == "0x31a6675cbe84365bf2b0cbce617ece6c47023ef70826533bde5203d32171dc3c" && b == "swap" && c == "TokenPairReserve") {
+								resources.push(EndpointResourceChange {
+									address: resource.address.to_string(),
+									typ: typ.to_string(),
+									data: Some(resource.data.data.clone())
+								});
+							}
+						}
+					}*/
+
                     if !events.is_empty() || !resources.is_empty() || !changes.is_empty() {
                         transactions.push(EndpointTransaction {
                             version: transaction.info.version.0,

@@ -4,25 +4,82 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     indexer::{
-        errors::TransactionProcessingError,
         fetcher::{TransactionFetcher, TransactionFetcherOptions, TransactionFetcherTrait},
         processing_result::ProcessingResult
     }
 };
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, Result};
 use aptos_api::context::Context as ApiContext;
 use aptos_logger::{debug, info};
 use chrono::ParseError;
 use std::{fmt::Debug, sync::Arc};
+use std::str::FromStr;
 use tokio::{sync::Mutex, task::JoinHandle};
-use aptos_api_types::{Transaction, WriteSetChange};
+use aptos_api_types::{Transaction, WriteSetChange, TransactionPayload, Address, IdentifierWrapper, MoveType, MoveStructTag};
+use aptos_types::account_address::AccountAddress;
 use crate::indexer::processing_result::{EndpointTableChange, EndpointTransaction, EndpointEvent, EndpointResourceChange};
+
+#[derive(Clone)]
+pub struct Type {
+    pub address: Address,
+    pub module: IdentifierWrapper,
+    pub name: IdentifierWrapper,
+}
+
+impl Type {
+
+    pub fn new(address: Address, module: IdentifierWrapper, name: IdentifierWrapper) -> Type {
+        Self {
+            address,
+            module,
+            name
+        }
+    }
+
+    pub fn eq(&self, struct_tag: &MoveStructTag) -> bool {
+        self.address == struct_tag.address && self.module == struct_tag.module && self.name == struct_tag.name
+    }
+
+}
+
+#[derive(Clone)]
+struct TypeVec(Vec<Type>);
+
+impl TypeVec {
+
+    pub fn contains_move_type(&self, move_type: &MoveType) -> bool {
+        if let MoveType::Struct(s) = move_type {
+            self.contains(&s)
+        } else {
+            false
+        }
+    }
+
+    pub fn contains(&self, struct_tag: &MoveStructTag) -> bool {
+        self.0.iter().any(|typ| typ.eq(&struct_tag))
+    }
+
+}
+
+fn to_type(types: &Vec<String>) -> TypeVec {
+    TypeVec(types.iter().map(|str| {
+        let split: Vec<&str> = str.split("::").collect();
+        if split.len() != 3 {
+            panic!("Invalid length");
+        }
+        Type::new(
+            Address::from(AccountAddress::from_hex_literal(&split[0]).unwrap()),
+            IdentifierWrapper::from_str(&split[1]).unwrap(),
+            IdentifierWrapper::from_str(&split[2]).unwrap()
+        )
+    }).collect())
+}
 
 #[derive(Clone)]
 pub struct Tailer {
     pub transaction_fetcher: Arc<Mutex<dyn TransactionFetcherTrait>>,
-    events: Vec<String>,
-    resources: Vec<String>,
+    events: TypeVec,
+    resources: TypeVec,
     handles: Vec<String>
 }
 
@@ -38,8 +95,8 @@ impl Tailer {
 
         Ok(Self {
             transaction_fetcher: Arc::new(Mutex::new(transaction_fetcher)),
-            events,
-            resources,
+            events: to_type(&events),
+            resources: to_type(&resources),
             handles
         })
     }
@@ -94,11 +151,10 @@ impl Tailer {
                     let mut changes = vec![];
 
                     for event in &transaction.events {
-                        let typ = event.typ.to_string();
-                        if self.events.contains(&typ) {
+                        if self.events.contains_move_type(&event.typ) {
                             events.push(EndpointEvent {
                                 address: event.guid.account_address.to_string(),
-                                typ,
+                                typ: event.typ.to_string(),
                                 data: event.data.clone()
                             });
                         }
@@ -118,7 +174,7 @@ impl Tailer {
                             }
                             WriteSetChange::DeleteResource(resource) => {
                                 let typ = resource.resource.to_string();
-                                if self.resources.contains(&typ) {
+                                if self.resources.contains(&resource.resource) {
                                     resources.push(EndpointResourceChange {
                                         address: resource.address.to_string(),
                                         typ,
@@ -138,11 +194,10 @@ impl Tailer {
                                 }
                             }
                             WriteSetChange::WriteResource(resource) => {
-                                let typ = resource.data.typ.to_string();
-                                if self.resources.contains(&typ) {
+                                if self.resources.contains(&resource.data.typ) {
                                     resources.push(EndpointResourceChange {
                                         address: resource.address.to_string(),
-                                        typ,
+                                        typ: resource.data.typ.to_string(),
                                         data: Some(resource.data.data.clone())
                                     });
                                 }
@@ -151,28 +206,15 @@ impl Tailer {
                         }
                     }
 
-					/*for write in &transaction.info.changes {
-						if let WriteSetChange::WriteResource(resource) = write {
-							let typ = &resource.data.typ;
-							let a = typ.address.to_string();
-							let b = typ.module.to_string();
-							let c = typ.name.to_string();
-							if (a == "0xc7efb4076dbe143cbcd98cfaaa929ecfc8f299203dfff63b95ccb6bfe19850fa" && b == "swap" && c == "TokenPairReserve") ||
-								(a == "0x190d44266241744264b964a37b8f09863167a12d3e70cda39376cfb4e3561e12" && b == "liquidity_pool" && c == "LiquidityPool") ||
-								(a == "0x31a6675cbe84365bf2b0cbce617ece6c47023ef70826533bde5203d32171dc3c" && b == "swap" && c == "TokenPairReserve") {
-								resources.push(EndpointResourceChange {
-									address: resource.address.to_string(),
-									typ: typ.to_string(),
-									data: Some(resource.data.data.clone())
-								});
-							}
-						}
-					}*/
-
                     if !events.is_empty() || !resources.is_empty() || !changes.is_empty() {
                         transactions.push(EndpointTransaction {
                             version: transaction.info.version.0,
                             timestamp: transaction.timestamp.0,
+                            function: if let TransactionPayload::EntryFunctionPayload(payload) = &transaction.request.payload {
+                                Some(payload.function.to_string())
+                            } else {
+                                None
+                            },
                             events,
                             resources,
                             changes

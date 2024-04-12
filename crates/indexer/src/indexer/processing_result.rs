@@ -21,6 +21,8 @@ pub struct EndpointRequest {
 pub struct EndpointTransaction {
     pub version: u64,
     pub timestamp: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub function: Option<String>,
     pub events: Vec<EndpointEvent>,
     pub resources: Vec<EndpointResourceChange>,
     pub changes: Vec<EndpointTableChange>

@@ -2,7 +2,7 @@
 
 // Copyright (c) Aptos
 // SPDX-License-Identifier: Apache-2.0
-use aptos_api_types::{MoveType, MoveStructValue};
+use aptos_api_types::{MoveType, MoveStructValue, Address};
 use serde::{Serialize, Deserialize};
 
 #[derive(Debug)]
@@ -23,6 +23,7 @@ pub struct EndpointTransaction {
     pub timestamp: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub function: Option<String>,
+    pub sender: String,
     pub events: Vec<EndpointEvent>,
     pub resources: Vec<EndpointResourceChange>,
     pub changes: Vec<EndpointTableChange>

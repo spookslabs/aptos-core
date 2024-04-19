@@ -215,6 +215,7 @@ impl Tailer {
                             } else {
                                 None
                             },
+                            sender: transaction.request.sender.to_string(),
                             events,
                             resources,
                             changes

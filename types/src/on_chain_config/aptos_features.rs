@@ -2,10 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::on_chain_config::OnChainConfig;
+use move_core_types::{
+    effects::{ChangeSet, Op},
+    language_storage::CORE_CODE_ADDRESS,
+};
 use serde::{Deserialize, Serialize};
-
+use strum_macros::FromRepr;
 /// The feature flags define in the Move source. This must stay aligned with the constants there.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, FromRepr)]
 #[allow(non_camel_case_types)]
 pub enum FeatureFlag {
     CODE_DEPENDENCY_CHECK = 1,
@@ -61,6 +65,9 @@ pub enum FeatureFlag {
     REFUNDABLE_BYTES = 51,
     OBJECT_CODE_DEPLOYMENT = 52,
     MAX_OBJECT_NESTING_CHECK = 53,
+    KEYLESS_ACCOUNTS_WITH_PASSKEYS = 54,
+    MULTISIG_V2_ENHANCEMENT = 55,
+    DELEGATION_POOL_ALLOWLISTING = 56,
 }
 
 impl FeatureFlag {
@@ -112,6 +119,9 @@ impl FeatureFlag {
             FeatureFlag::REFUNDABLE_BYTES,
             FeatureFlag::OBJECT_CODE_DEPLOYMENT,
             FeatureFlag::MAX_OBJECT_NESTING_CHECK,
+            FeatureFlag::KEYLESS_ACCOUNTS_WITH_PASSKEYS,
+            FeatureFlag::MULTISIG_V2_ENHANCEMENT,
+            FeatureFlag::DELEGATION_POOL_ALLOWLISTING,
         ]
     }
 }
@@ -129,17 +139,9 @@ impl Default for Features {
             features: vec![0; 5],
         };
 
-        use FeatureFlag::*;
-        features.enable(VM_BINARY_FORMAT_V6);
-        features.enable(BLS12_381_STRUCTURES);
-        features.enable(SIGNATURE_CHECKER_V2);
-        features.enable(STORAGE_SLOT_METADATA);
-        features.enable(APTOS_UNIQUE_IDENTIFIERS);
-        features.enable(SIGNATURE_CHECKER_V2_SCRIPT_FIX);
-        features.enable(AGGREGATOR_V2_API);
-        features.enable(BN254_STRUCTURES);
-        features.enable(REFUNDABLE_BYTES);
-
+        for feature in FeatureFlag::default_features() {
+            features.enable(feature);
+        }
         features
     }
 }
@@ -167,6 +169,17 @@ impl Features {
     pub fn disable(&mut self, flag: FeatureFlag) {
         let (byte_index, bit_mask) = self.resize_for_flag(flag);
         self.features[byte_index] &= !bit_mask;
+    }
+
+    pub fn into_flag_vec(self) -> Vec<FeatureFlag> {
+        let Self { features } = self;
+        features
+            .into_iter()
+            .flat_map(|byte| (0..8).map(move |bit_idx| byte & (1 << bit_idx) != 0))
+            .enumerate()
+            .filter(|(_feature_idx, enabled)| *enabled)
+            .map(|(feature_idx, _)| FeatureFlag::from_repr(feature_idx).unwrap())
+            .collect()
     }
 
     pub fn is_enabled(&self, flag: FeatureFlag) -> bool {
@@ -221,7 +234,7 @@ impl Features {
 
     /// Whether the keyless accounts feature is enabled, specifically the ZK path with ZKP-based signatures.
     /// The ZK-less path is controlled via a different `FeatureFlag::KEYLESS_BUT_ZKLESS_ACCOUNTS` flag.
-    pub fn is_keyless_enabled(&self) -> bool {
+    pub fn is_zk_keyless_enabled(&self) -> bool {
         self.is_enabled(FeatureFlag::KEYLESS_ACCOUNTS)
     }
 
@@ -231,8 +244,12 @@ impl Features {
     /// safety precaution in case of emergency (e.g., if the ZK-based signatures must be temporarily
     /// turned off due to a zeroday exploit, the ZK-less path will still allow users to transact,
     /// but without privacy).
-    pub fn is_keyless_zkless_enabled(&self) -> bool {
+    pub fn is_zkless_keyless_enabled(&self) -> bool {
         self.is_enabled(FeatureFlag::KEYLESS_BUT_ZKLESS_ACCOUNTS)
+    }
+
+    pub fn is_keyless_with_passkeys_enabled(&self) -> bool {
+        self.is_enabled(FeatureFlag::KEYLESS_ACCOUNTS_WITH_PASSKEYS)
     }
 
     pub fn is_remove_detailed_error_from_hash_enabled(&self) -> bool {
@@ -242,4 +259,35 @@ impl Features {
     pub fn is_refundable_bytes_enabled(&self) -> bool {
         self.is_enabled(FeatureFlag::REFUNDABLE_BYTES)
     }
+}
+
+pub fn aptos_test_feature_flags_genesis() -> ChangeSet {
+    let features_value = bcs::to_bytes(&Features::default()).unwrap();
+
+    let mut change_set = ChangeSet::new();
+    // we need to initialize features to their defaults.
+    change_set
+        .add_resource_op(
+            CORE_CODE_ADDRESS,
+            Features::struct_tag(),
+            Op::New(features_value.into()),
+        )
+        .expect("adding genesis Feature resource must succeed");
+
+    change_set
+}
+
+#[test]
+fn test_features_into_flag_vec() {
+    let mut features = Features { features: vec![] };
+    features.enable(FeatureFlag::BLS12_381_STRUCTURES);
+    features.enable(FeatureFlag::BN254_STRUCTURES);
+    let flag_vec = features.into_flag_vec();
+    assert_eq!(
+        vec![
+            FeatureFlag::BLS12_381_STRUCTURES,
+            FeatureFlag::BN254_STRUCTURES
+        ],
+        flag_vec
+    );
 }

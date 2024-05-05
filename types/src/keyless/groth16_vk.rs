@@ -1,4 +1,5 @@
 // Copyright © Aptos Foundation
+// SPDX-License-Identifier: Apache-2.0
 
 use crate::{
     keyless::KEYLESS_ACCOUNT_MODULE_NAME, move_utils::as_move_value::AsMoveValue, serialize,
@@ -17,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
 /// Reflection of aptos_framework::keyless_account::Groth16VerificationKey
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct Groth16VerificationKey {
     pub alpha_g1: Vec<u8>,
     pub beta_g2: Vec<u8>,

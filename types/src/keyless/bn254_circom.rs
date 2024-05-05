@@ -1,10 +1,12 @@
 // Copyright © Aptos Foundation
+// SPDX-License-Identifier: Apache-2.0
 
+use super::circuit_constants::MAX_EXTRA_FIELD_BYTES;
 use crate::{
     jwks::rsa::RSA_JWK,
     keyless::{
-        base64url_encode_str, Configuration, IdCommitment, KeylessPublicKey, KeylessSignature,
-        ZkpOrOpenIdSig,
+        base64url_encode_str, Configuration, EphemeralCertificate, IdCommitment, KeylessPublicKey,
+        KeylessSignature,
     },
     serialize,
 };
@@ -14,7 +16,8 @@ use ark_bn254::{Fq, Fq2, Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ff::PrimeField;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use num_traits::{One, Zero};
-use serde::{Deserialize, Serialize};
+use once_cell::sync::Lazy;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_big_array::BigArray;
 
 // TODO(keyless): Some of this stuff, if not all, belongs to the aptos-crypto crate
@@ -22,14 +25,18 @@ use serde_big_array::BigArray;
 pub const G1_PROJECTIVE_COMPRESSED_NUM_BYTES: usize = 32;
 pub const G2_PROJECTIVE_COMPRESSED_NUM_BYTES: usize = 64;
 
+// When the extra_field is none, use this hash value which is equal to the hash of a single space string.
+static EMPTY_EXTRA_FIELD_HASH: Lazy<Fr> =
+    Lazy::new(|| poseidon_bn254::pad_and_hash_string(" ", MAX_EXTRA_FIELD_BYTES as usize).unwrap());
+
 /// This will do the proper subgroup membership checks.
-pub(crate) fn g1_projective_str_to_affine(x: &str, y: &str) -> anyhow::Result<G1Affine> {
+pub fn g1_projective_str_to_affine(x: &str, y: &str) -> anyhow::Result<G1Affine> {
     let g1_affine = G1Bytes::new_unchecked(x, y)?.deserialize_into_affine()?;
     Ok(g1_affine)
 }
 
 /// This will do the proper subgroup membership checks.
-pub(crate) fn g2_projective_str_to_affine(x: [&str; 2], y: [&str; 2]) -> anyhow::Result<G2Affine> {
+pub fn g2_projective_str_to_affine(x: [&str; 2], y: [&str; 2]) -> anyhow::Result<G2Affine> {
     let g2_affine = G2Bytes::new_unchecked(x, y)?.as_affine()?;
     Ok(g2_affine)
 }
@@ -47,7 +54,7 @@ pub fn parse_fr_element(s: &str) -> Result<Fr, CryptoMaterialError> {
         .map_err(|_e| CryptoMaterialError::DeserializationError)
 }
 
-#[derive(Copy, Clone, Debug, Deserialize, PartialEq, Eq, Hash, Serialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct G1Bytes(pub(crate) [u8; G1_PROJECTIVE_COMPRESSED_NUM_BYTES]);
 
 impl G1Bytes {
@@ -81,6 +88,43 @@ impl G1Bytes {
     }
 }
 
+impl<'de> Deserialize<'de> for G1Bytes {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = <String>::deserialize(deserializer)?;
+            let bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
+            G1Bytes::new_from_vec(bytes).map_err(serde::de::Error::custom)
+        } else {
+            // In order to preserve the Serde data model and help analysis tools,
+            // make sure to wrap our value in a container with the same name
+            // as the original type.
+            #[derive(::serde::Deserialize)]
+            #[serde(rename = "G1Bytes")]
+            struct Value([u8; G1_PROJECTIVE_COMPRESSED_NUM_BYTES]);
+
+            let value = Value::deserialize(deserializer)?;
+            Ok(G1Bytes(value.0))
+        }
+    }
+}
+
+impl Serialize for G1Bytes {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if serializer.is_human_readable() {
+            hex::encode(self.0).serialize(serializer)
+        } else {
+            // See comment in deserialize.
+            serializer.serialize_newtype_struct("G1Bytes", &self.0)
+        }
+    }
+}
+
 impl TryInto<G1Projective> for &G1Bytes {
     type Error = CryptoMaterialError;
 
@@ -99,8 +143,8 @@ impl TryInto<G1Affine> for &G1Bytes {
     }
 }
 
-#[derive(Copy, Clone, Debug, Deserialize, PartialEq, Eq, Hash, Serialize)]
-pub struct G2Bytes(#[serde(with = "BigArray")] pub(crate) [u8; G2_PROJECTIVE_COMPRESSED_NUM_BYTES]);
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct G2Bytes(pub(crate) [u8; G2_PROJECTIVE_COMPRESSED_NUM_BYTES]);
 
 impl G2Bytes {
     pub fn new_unchecked(x: [&str; 2], y: [&str; 2]) -> anyhow::Result<Self> {
@@ -132,6 +176,51 @@ impl G2Bytes {
     }
 }
 
+impl<'de> Deserialize<'de> for G2Bytes {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = <String>::deserialize(deserializer)?;
+            let bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
+            G2Bytes::new_from_vec(bytes).map_err(serde::de::Error::custom)
+        } else {
+            // In order to preserve the Serde data model and help analysis tools,
+            // make sure to wrap our value in a container with the same name
+            // as the original type.
+            #[derive(::serde::Deserialize)]
+            #[serde(rename = "G2Bytes")]
+            struct Value(#[serde(with = "BigArray")] [u8; G2_PROJECTIVE_COMPRESSED_NUM_BYTES]);
+
+            let value = Value::deserialize(deserializer)?;
+            Ok(G2Bytes(value.0))
+        }
+    }
+}
+
+impl Serialize for G2Bytes {
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if serializer.is_human_readable() {
+            hex::encode(self.0).serialize(serializer)
+        } else {
+            // Doing this differently than G1Bytes in order to use serde(with = "BigArray"). This
+            // apparently is needed to correctly deserialize arrays with size greater than 32.
+            #[derive(::serde::Serialize)]
+            #[serde(rename = "G2Bytes")]
+            struct Value(#[serde(with = "BigArray")] [u8; G2_PROJECTIVE_COMPRESSED_NUM_BYTES]);
+
+            let value = Value(self.0);
+
+            // See comment in deserialize.
+            value.serialize(serializer)
+        }
+    }
+}
+
 impl TryInto<G2Projective> for &G2Bytes {
     type Error = CryptoMaterialError;
 
@@ -156,9 +245,9 @@ pub fn get_public_inputs_hash(
     jwk: &RSA_JWK,
     config: &Configuration,
 ) -> anyhow::Result<Fr> {
-    if let ZkpOrOpenIdSig::Groth16Zkp(proof) = &sig.sig {
+    if let EphemeralCertificate::ZeroKnowledgeSig(proof) = &sig.cert {
         let (has_extra_field, extra_field_hash) = match &proof.extra_field {
-            None => (Fr::zero(), Fr::zero()),
+            None => (Fr::zero(), *Lazy::force(&EMPTY_EXTRA_FIELD_HASH)),
             Some(extra_field) => (
                 Fr::one(),
                 poseidon_bn254::pad_and_hash_string(

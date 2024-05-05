@@ -1,11 +1,13 @@
 // Copyright © Aptos Foundation
+// SPDX-License-Identifier: Apache-2.0
 
 use crate::keyless::{
     bn254_circom::get_public_inputs_hash,
     circuit_testcases::*,
     test_utils::{get_sample_groth16_sig_and_pk, get_sample_openid_sig_and_pk},
-    Configuration, ZkpOrOpenIdSig, DEVNET_VERIFICATION_KEY,
+    Configuration, EphemeralCertificate, DEVNET_VERIFICATION_KEY,
 };
+use aptos_crypto::poseidon_bn254::fr_to_bytes_le;
 use std::ops::{AddAssign, Deref};
 
 // TODO(keyless): Add instructions on how to produce this test case.
@@ -14,20 +16,20 @@ fn test_keyless_groth16_proof_verification() {
     let config = Configuration::new_for_devnet();
 
     let (zk_sig, zk_pk) = get_sample_groth16_sig_and_pk();
-    let proof = match &zk_sig.sig {
-        ZkpOrOpenIdSig::Groth16Zkp(proof) => proof.clone(),
-        ZkpOrOpenIdSig::OpenIdSig(_) => panic!("Internal inconsistency"),
+    let proof = match &zk_sig.cert {
+        EphemeralCertificate::ZeroKnowledgeSig(proof) => proof.clone(),
+        EphemeralCertificate::OpenIdSig(_) => panic!("Internal inconsistency"),
     };
 
     let public_inputs_hash = get_public_inputs_hash(&zk_sig, &zk_pk, &SAMPLE_JWK, &config).unwrap();
 
     println!(
         "Keyless Groth16 test public inputs hash: {}",
-        public_inputs_hash
+        hex::encode(fr_to_bytes_le(&public_inputs_hash))
     );
 
     proof
-        .verify_proof(public_inputs_hash, DEVNET_VERIFICATION_KEY.deref())
+        .verify_groth16_proof(public_inputs_hash, DEVNET_VERIFICATION_KEY.deref())
         .unwrap();
 }
 
@@ -37,9 +39,9 @@ fn test_keyless_oidc_sig_verifies() {
     let config = Configuration::new_for_testing();
     let (sig, pk) = get_sample_openid_sig_and_pk();
 
-    let oidc_sig = match &sig.sig {
-        ZkpOrOpenIdSig::Groth16Zkp(_) => panic!("Internal inconsistency"),
-        ZkpOrOpenIdSig::OpenIdSig(oidc_sig) => oidc_sig.clone(),
+    let oidc_sig = match &sig.cert {
+        EphemeralCertificate::ZeroKnowledgeSig(_) => panic!("Internal inconsistency"),
+        EphemeralCertificate::OpenIdSig(oidc_sig) => oidc_sig.clone(),
     };
 
     oidc_sig

@@ -7,7 +7,7 @@
 use crate::gas_schedule::VMGasParameters;
 use aptos_gas_algebra::{
     AbstractValueSize, Fee, FeePerByte, FeePerGasUnit, FeePerSlot, Gas, GasExpression,
-    GasScalingFactor, GasUnit, NumSlots,
+    GasScalingFactor, GasUnit, NumModules, NumSlots,
 };
 use move_core_types::gas_algebra::{
     InternalGas, InternalGasPerArg, InternalGasPerByte, InternalGasUnit, NumBytes, ToUnitWithParams,
@@ -65,7 +65,7 @@ crate::gas_schedule::macros::define_gas_parameters!(
         [
             max_transaction_size_in_bytes: NumBytes,
             "max_transaction_size_in_bytes",
-            64 * 1024
+            512 * 1024
         ],
         [
             gas_unit_scaling_factor: GasScalingFactor,
@@ -116,6 +116,16 @@ crate::gas_schedule::macros::define_gas_parameters!(
             legacy_write_data_per_byte_in_val: InternalGasPerByte,
             { 0..=9 => "write_data.per_byte_in_val" },
             10_000
+        ],
+        [
+            storage_io_per_event_byte_write: InternalGasPerByte,
+            { 16.. => "storage_io_per_event_byte_write" },
+            0,
+        ],
+        [
+            storage_io_per_transaction_byte_write: InternalGasPerByte,
+            { 16.. => "storage_io_per_transaction_byte_write" },
+            0,
         ],
         [memory_quota: AbstractValueSize, { 1.. => "memory_quota" }, 10_000_000],
         [
@@ -199,6 +209,26 @@ crate::gas_schedule::macros::define_gas_parameters!(
             max_storage_fee: Fee,
             { 7.. => "max_storage_fee" },
             2_0000_0000, // 2 APT
+        ],
+        [
+            dependency_per_module: InternalGas,
+            { 15.. => "dependency_per_module" },
+            4_000,
+        ],
+        [
+            dependency_per_byte: InternalGasPerByte,
+            { 15.. => "dependency_per_byte" },
+            100,
+        ],
+        [
+            max_num_dependencies: NumModules,
+            { 15.. => "max_num_dependencies" },
+            420,
+        ],
+        [
+            max_total_dependency_size: NumBytes,
+            { 15.. => "max_total_dependency_size" },
+            1024 * 1024 * 12 / 10, // 1.2 MB
         ],
     ]
 );

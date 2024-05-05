@@ -3,8 +3,8 @@
 
 use crate::{
     log::{
-        CallFrame, EventStorage, ExecutionAndIOCosts, ExecutionGasEvent, StorageFees, WriteStorage,
-        WriteTransient,
+        CallFrame, Dependency, EventStorage, EventTransient, ExecutionAndIOCosts,
+        ExecutionGasEvent, StorageFees, WriteStorage, WriteTransient,
     },
     render::Render,
     FrameName, TransactionGasLog,
@@ -182,10 +182,29 @@ impl CallFrame {
     }
 }
 
+impl EventTransient {
+    fn to_erased(&self) -> Node<InternalGas> {
+        Node::new(format!("{}", Render(&self.ty)), self.cost)
+    }
+}
+
 impl WriteTransient {
     fn to_erased(&self) -> Node<InternalGas> {
         Node::new(
             format!("{}<{}>", Render(&self.op_type), Render(&self.key)),
+            self.cost,
+        )
+    }
+}
+
+impl Dependency {
+    fn to_erased(&self) -> Node<InternalGas> {
+        Node::new(
+            format!(
+                "{}{}",
+                Render(&self.id),
+                if self.is_new { " (new)" } else { "" }
+            ),
             self.cost,
         )
     }
@@ -197,8 +216,28 @@ impl ExecutionAndIOCosts {
         let mut nodes = vec![];
 
         nodes.push(Node::new("intrinsic", self.intrinsic_cost));
+
+        if !self.dependencies.is_empty() {
+            let deps = Node::new_with_children(
+                "dependencies",
+                0,
+                self.dependencies.iter().map(|dep| dep.to_erased()),
+            );
+            nodes.push(deps);
+        }
+
         nodes.push(self.call_graph.to_erased());
 
+        nodes.push(Node::new(
+            "transaction",
+            self.transaction_transient.unwrap_or_else(|| 0.into()),
+        ));
+        let events = Node::new_with_children(
+            "events",
+            0,
+            self.events_transient.iter().map(|event| event.to_erased()),
+        );
+        nodes.push(events);
         let writes = Node::new_with_children(
             "writes",
             0,

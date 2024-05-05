@@ -42,7 +42,7 @@ use move_core_types::{
     resolver::ModuleResolver,
     value::{MoveStructLayout, MoveTypeLayout},
 };
-use move_resource_viewer::MoveValueAnnotator;
+use move_resource_viewer::{Limiter, MoveValueAnnotator};
 use serde_json::Value;
 use std::{
     convert::{TryFrom, TryInto},
@@ -81,8 +81,13 @@ impl<'a, R: ModuleResolver + ?Sized> MoveConverter<'a, R> {
         &self,
         data: impl Iterator<Item = (StructTag, &'b [u8])>,
     ) -> Result<Vec<MoveResource>> {
-        data.map(|(typ, bytes)| self.try_into_resource(&typ, bytes))
-            .collect()
+        let mut limiter = Limiter::default();
+        data.map(|(typ, bytes)| {
+            self.inner
+                .view_resource_with_limit(&typ, bytes, &mut limiter)?
+                .try_into()
+        })
+        .collect()
     }
 
     pub fn try_into_resource(&self, typ: &StructTag, bytes: &'_ [u8]) -> Result<MoveResource> {
@@ -980,14 +985,29 @@ pub trait ExplainVMStatus {
 
     fn explain_vm_status(&self, status: &ExecutionStatus) -> String {
         match status {
-            ExecutionStatus::MoveAbort { location, code, info } => match &location {
-                AbortLocation::Module(_) => {
-                    info.as_ref().map(|i| {
-                        format!("Move abort in {}: {}({:#x}): {}", abort_location_to_str(location), i.reason_name, code, i.description)
-                    }).unwrap_or_else(|| {
-                        format!("Move abort in {}: {:#x}", abort_location_to_str(location), code)
+            ExecutionStatus::MoveAbort {
+                location,
+                code,
+                info,
+            } => match &location {
+                AbortLocation::Module(_) => info
+                    .as_ref()
+                    .map(|i| {
+                        format!(
+                            "Move abort in {}: {}({:#x}): {}",
+                            abort_location_to_str(location),
+                            i.reason_name,
+                            code,
+                            i.description
+                        )
                     })
-                }
+                    .unwrap_or_else(|| {
+                        format!(
+                            "Move abort in {}: {:#x}",
+                            abort_location_to_str(location),
+                            code
+                        )
+                    }),
                 AbortLocation::Script => format!("Move abort: code {:#x}", code),
             },
             ExecutionStatus::Success => "Executed successfully".to_owned(),
@@ -998,24 +1018,27 @@ pub trait ExplainVMStatus {
                 code_offset,
             } => {
                 let func_name = match location {
-                    AbortLocation::Module(module_id) => self.explain_function_index(module_id, function)
+                    AbortLocation::Module(module_id) => self
+                        .explain_function_index(module_id, function)
                         .map(|name| format!("{}::{}", abort_location_to_str(location), name))
-                        .unwrap_or_else(|_| format!("{}::<#{} function>", abort_location_to_str(location), function)),
+                        .unwrap_or_else(|_| {
+                            format!(
+                                "{}::<#{} function>",
+                                abort_location_to_str(location),
+                                function
+                            )
+                        }),
                     AbortLocation::Script => "script".to_owned(),
                 };
                 format!(
                     "Execution failed in {} at code offset {}",
                     func_name, code_offset
                 )
-            }
-            ExecutionStatus::MiscellaneousError(code) => {
-                code.map_or(
-                    "Move bytecode deserialization / verification failed, including entry function not found or invalid arguments".to_owned(),
-                    |e| format!(
-                        "Transaction Executed and Committed with Error {:#?}", e
-                    ),
-                )
-            }
+            },
+            ExecutionStatus::MiscellaneousError(code) => code.map_or(
+                "Execution failed with miscellaneous error and no status code".to_owned(),
+                |e| format!("{:#?}", e),
+            ),
         }
     }
 

@@ -108,6 +108,17 @@ impl ExecutionAndIOCosts {
             path: &'a mut Vec<String>,
         }
 
+        for dep in &self.dependencies {
+            lines.push(
+                format!(
+                    "dependencies;{}{}",
+                    Render(&dep.id),
+                    if dep.is_new { "(new)" } else { "" }
+                ),
+                dep.cost,
+            )
+        }
+
         impl<'a> Rec<'a> {
             fn visit(&mut self, frame: &CallFrame) {
                 self.path.push(format!("{}", frame.name));
@@ -156,6 +167,12 @@ impl ExecutionAndIOCosts {
         }
         .visit(&self.call_graph);
 
+        if let Some(cost) = &self.transaction_transient {
+            lines.push("transaction_size", *cost)
+        }
+        for item in &self.events_transient {
+            lines.push(format!("event_emits;<{}>", Render(&item.ty)), item.cost)
+        }
         for item in &self.write_set_transient {
             lines.push(
                 format!("write_set;{}<{}>", Render(&item.op_type), Render(&item.key)),

@@ -3,7 +3,9 @@
 
 use aptos_gas_algebra::{Fee, FeePerGasUnit, Gas, GasExpression, GasScalingFactor, Octa};
 use aptos_gas_schedule::VMGasParameters;
-use aptos_types::{state_store::state_key::StateKey, write_set::WriteOpSize};
+use aptos_types::{
+    contract_event::ContractEvent, state_store::state_key::StateKey, write_set::WriteOpSize,
+};
 use aptos_vm_types::{
     change_set::VMChangeSet,
     resolver::ExecutorView,
@@ -66,6 +68,9 @@ pub trait GasAlgebra {
         gas_unit_price: FeePerGasUnit,
     ) -> PartialVMResult<()>;
 
+    /// Counts a dependency against the limits.
+    fn count_dependency(&mut self, size: NumBytes) -> PartialVMResult<()>;
+
     /// Returns the amount of gas used under the execution category.
     fn execution_gas_used(&self) -> InternalGas;
 
@@ -107,6 +112,12 @@ pub trait AptosGasMeter: MoveGasMeter {
     /// The cost stays constant for transactions below a certain size, but will grow proportionally
     /// for bigger ones.
     fn charge_intrinsic_gas_for_transaction(&mut self, txn_size: NumBytes) -> VMResult<()>;
+
+    /// Charges IO gas for the transaction itself.
+    fn charge_io_gas_for_transaction(&mut self, txn_size: NumBytes) -> VMResult<()>;
+
+    /// Charges IO gas for an emitted event.
+    fn charge_io_gas_for_event(&mut self, event: &ContractEvent) -> VMResult<()>;
 
     /// Charges IO gas for an item in the write set.
     ///

@@ -1,4 +1,5 @@
 // Copyright © Aptos Foundation
+// SPDX-License-Identifier: Apache-2.0
 
 use crate::{
     invalid_signature,
@@ -17,7 +18,7 @@ use move_core_types::{
 use serde::{Deserialize, Serialize};
 
 /// Reflection of aptos_framework::keyless_account::Configuration
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct Configuration {
     pub override_aud_vals: Vec<String>,
     pub max_signatures_per_txn: u16,
@@ -53,7 +54,7 @@ impl MoveStructType for Configuration {
 
 impl Configuration {
     /// Should only be used for testing.
-    pub const OVERRIDE_AUD_FOR_TESTING: &'static str = "some_override_aud";
+    pub const OVERRIDE_AUD_FOR_TESTING: &'static str = "test.recovery.aud";
 
     pub fn new_for_devnet() -> Configuration {
         Configuration {

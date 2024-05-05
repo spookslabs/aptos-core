@@ -118,7 +118,7 @@ impl Fetcher {
                         highest_known_version,
                         num_transactions_to_fetch,
                     )
-                    .await
+                        .await
                 });
                 tasks.push(task);
                 starting_version += num_transactions_to_fetch as u64;
@@ -225,7 +225,7 @@ async fn fetch_nexts(
         num_transactions_to_fetch,
         3,
     )
-    .await;
+        .await;
 
     let (_, _, block_event) = context
         .db
@@ -252,13 +252,7 @@ async fn fetch_nexts(
         // Do not update block_height if first block is block metadata
         if ind > 0 {
             // Update the timestamp if the next block occurs
-            if let Some(txn) = raw_txn.transaction.try_as_block_metadata_ext() {
-                timestamp = txn.timestamp_usecs();
-                epoch = txn.epoch();
-                epoch_bcs = aptos_api_types::U64::from(epoch);
-                block_height += 1;
-                block_height_bcs = aptos_api_types::U64::from(block_height);
-            } else if let Some(txn) = raw_txn.transaction.try_as_block_metadata() {
+            if let Some(txn) = raw_txn.transaction.try_as_block_metadata() {
                 timestamp = txn.timestamp_usecs();
                 epoch = txn.epoch();
                 epoch_bcs = aptos_api_types::U64::from(epoch);
@@ -289,10 +283,10 @@ async fn fetch_nexts(
                         sct.info.block_height = Some(block_height_bcs);
                         sct.info.epoch = Some(epoch_bcs);
                     },
-                    Transaction::ValidatorTransaction(ref mut st) => {
-                        st.info.block_height = Some(block_height_bcs);
-                        st.info.epoch = Some(epoch_bcs);
-                    },
+					Transaction::ValidatorTransaction(ref mut vtx) => {
+						vtx.info.block_height = Some(block_height_bcs);
+						vtx.info.epoch = Some(epoch_bcs);
+					}
                 };
                 txn
             }) {
@@ -348,8 +342,8 @@ pub struct TransactionFetcherOptions {
 }
 
 fn default_if_zero<T>(value: Option<T>, default: T) -> T
-where
-    T: PartialEq + Copy + Default,
+    where
+        T: PartialEq + Copy + Default,
 {
     match value {
         Some(v) => {

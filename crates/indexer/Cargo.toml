@@ -18,10 +18,10 @@ aptos-api = { workspace = true }
 aptos-api-types = { workspace = true }
 aptos-bitvec = { workspace = true }
 aptos-config = { workspace = true }
+aptos-db-indexer = { workspace = true }
 aptos-logger = { workspace = true }
 aptos-mempool = { workspace = true }
 aptos-metrics-core = { workspace = true }
-aptos-runtimes = { workspace = true }
 aptos-storage-interface = { workspace = true }
 aptos-types = { workspace = true }
 aptos-vm = { workspace = true }
@@ -29,22 +29,21 @@ async-trait = { workspace = true }
 bcs = { workspace = true }
 bigdecimal = { workspace = true }
 chrono = { workspace = true }
-diesel = { workspace = true, features = [
-    "chrono",
-    "postgres",
-    "r2d2",
-    "numeric",
-    "serde_json",
-] }
-diesel_migrations = { workspace = true }
+clap = { workspace = true }
 field_count = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 once_cell = { workspace = true }
+regex = { workspace = true }
+reqwest = { workspace = true }
+reqwest-middleware = { workspace = true }
+reqwest-retry = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 tokio = { workspace = true }
+tokio-tungstenite = "0.18.0"
+url = { workspace = true }
 
 [dev-dependencies]
 aptos-api-test-context = { workspace = true }

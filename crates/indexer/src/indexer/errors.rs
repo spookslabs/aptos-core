@@ -1,6 +1,11 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
+// Copyright © Aptos Foundation
+
+// Copyright (c) Aptos
+// SPDX-License-Identifier: Apache-2.0
+
 use anyhow::Error;
 
 // Error, start_version, end_version, name

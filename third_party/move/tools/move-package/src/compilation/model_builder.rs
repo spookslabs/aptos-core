@@ -130,13 +130,19 @@ impl ModelBuilder {
         match self.model_config.compiler_version {
             CompilerVersion::V1 => run_model_builder_with_options(
                 all_targets,
+                vec![],
                 all_deps,
                 ModelBuilderOptions::default(),
                 skip_attribute_checks,
                 known_attributes,
             ),
-            CompilerVersion::V2 => {
+            CompilerVersion::V2_0 => {
                 let mut options = make_options_for_v2_compiler(all_targets, all_deps);
+                options.language_version = self
+                    .resolution_graph
+                    .build_options
+                    .compiler_config
+                    .language_version;
                 options.known_attributes = known_attributes.clone();
                 options.skip_attribute_checks = skip_attribute_checks;
                 let mut error_writer = StandardStream::stderr(ColorChoice::Auto);

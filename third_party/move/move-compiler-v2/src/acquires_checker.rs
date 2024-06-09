@@ -6,7 +6,7 @@
 //! - The body of `m::f` contains a `move_from<T>`, `borrow_global_mut<T>`, or `borrow_global<T>` instruction, or
 //! - The body of `m::f` invokes a function `m::g` declared in the same module that is annotated with acquires
 //! Warn if access specifiers other than plain `acquires R` is used.
-//! This check is enabled by flag `Experiment::ACQUIRES_CHECK`, and is disabled by default.
+//! This check is enabled by flag `Experiment::ACQUIRES_CHECK`.
 
 use move_model::{
     ast::{ExpData, Operation, ResourceSpecifier, VisitorPosition},
@@ -23,6 +23,9 @@ pub fn acquires_checker(env: &GlobalEnv) {
             let acquires = analyzer.analyze();
             for (fun_id, acquires) in acquires.into_iter() {
                 let fun_env = module.get_function(fun_id);
+                if fun_env.is_inline() {
+                    continue;
+                }
                 let mut declared_acquires = get_acquired_resources(&fun_env);
                 for (sid, acquired) in acquires.0 {
                     if declared_acquires.remove(&sid).is_none() {
@@ -63,7 +66,7 @@ fn get_acquired_resources(fun_env: &FunctionEnv) -> BTreeMap<StructId, Loc> {
     if let Some(access_specifiers) = fun_env.get_access_specifiers() {
         access_specifiers
             .iter()
-            .map(|access_specifier| {
+            .filter_map(|access_specifier| {
                 if let ResourceSpecifier::Resource(inst_qid) = &access_specifier.resource.1 {
                     if inst_qid.module_id != fun_env.module_env.get_id() {
                         fun_env.module_env.env.error(
@@ -71,9 +74,9 @@ fn get_acquired_resources(fun_env: &FunctionEnv) -> BTreeMap<StructId, Loc> {
                             "acquires a resource from another module",
                         )
                     }
-                    (inst_qid.id, access_specifier.resource.0.clone())
+                    Some((inst_qid.id, access_specifier.resource.0.clone()))
                 } else {
-                    unreachable!("unexpected resource specifier")
+                    None
                 }
             })
             .collect()

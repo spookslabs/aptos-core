@@ -22,6 +22,11 @@ storage:
   storage_pruner_config:
     ledger_pruner_config:
       enable: false
+      
+state_sync:
+  state_sync_driver:
+    bootstrapping_mode: ExecuteOrApplyFromGenesis
+    continuous_syncing_mode: ExecuteTransactionsOrApplyOutputs
 
 indexer:
   enabled: true

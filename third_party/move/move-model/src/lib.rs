@@ -7,6 +7,7 @@
 use crate::{
     ast::ModuleName,
     builder::{model_builder::ModelBuilder, module_builder::BytecodeModule},
+    metadata::LanguageVersion,
     model::{FunId, GlobalEnv, Loc, ModuleId, StructId},
     options::ModelBuilderOptions,
 };
@@ -53,6 +54,7 @@ pub mod constant_folder;
 pub mod exp_generator;
 pub mod exp_rewriter;
 pub mod intrinsics;
+pub mod metadata;
 pub mod model;
 pub mod options;
 pub mod pragmas;
@@ -79,10 +81,12 @@ pub struct PackageInfo {
 /// a new type checker.
 pub fn run_model_builder_in_compiler_mode(
     source: PackageInfo,
+    source_deps: PackageInfo,
     deps: Vec<PackageInfo>,
     skip_attribute_checks: bool,
     known_attributes: &BTreeSet<String>,
-    support_access_specifier: bool,
+    language_version: LanguageVersion,
+    compile_test_code: bool,
 ) -> anyhow::Result<GlobalEnv> {
     let to_package_paths = |PackageInfo {
                                 sources,
@@ -94,13 +98,16 @@ pub fn run_model_builder_in_compiler_mode(
     };
     run_model_builder_with_options_and_compilation_flags(
         vec![to_package_paths(source)],
+        vec![to_package_paths(source_deps)],
         deps.into_iter().map(to_package_paths).collect(),
         ModelBuilderOptions {
             compile_via_model: true,
-            support_access_specifier,
+            language_version,
             ..ModelBuilderOptions::default()
         },
-        Flags::model_compilation().set_skip_attribute_checks(skip_attribute_checks),
+        Flags::model_compilation()
+            .set_skip_attribute_checks(skip_attribute_checks)
+            .set_keep_testing_functions(compile_test_code),
         known_attributes,
     )
 }
@@ -114,6 +121,7 @@ pub fn run_model_builder_with_options<
     NamedAddress: Into<MoveSymbol> + Clone,
 >(
     move_sources: Vec<PackagePaths<Paths, NamedAddress>>,
+    move_deps: Vec<PackagePaths<Paths, NamedAddress>>,
     deps: Vec<PackagePaths<Paths, NamedAddress>>,
     options: ModelBuilderOptions,
     skip_attribute_checks: bool,
@@ -123,6 +131,7 @@ pub fn run_model_builder_with_options<
     flags = flags.set_skip_attribute_checks(skip_attribute_checks);
     run_model_builder_with_options_and_compilation_flags(
         move_sources,
+        move_deps,
         deps,
         options,
         flags,
@@ -135,16 +144,32 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     Paths: Into<MoveSymbol> + Clone,
     NamedAddress: Into<MoveSymbol> + Clone,
 >(
-    move_sources: Vec<PackagePaths<Paths, NamedAddress>>,
+    move_sources_targets: Vec<PackagePaths<Paths, NamedAddress>>,
+    move_sources_deps: Vec<PackagePaths<Paths, NamedAddress>>,
     deps: Vec<PackagePaths<Paths, NamedAddress>>,
     options: ModelBuilderOptions,
     flags: Flags,
     known_attributes: &BTreeSet<String>,
 ) -> anyhow::Result<GlobalEnv> {
     let mut env = GlobalEnv::new();
+    env.set_language_version(options.language_version);
     let compile_via_model = options.compile_via_model;
     env.set_extension(options);
 
+    let move_sources = move_sources_targets
+        .iter()
+        .chain(move_sources_deps.iter())
+        .cloned()
+        .collect();
+    let target_sources_names: BTreeSet<String> = move_sources_targets
+        .iter()
+        .flat_map(|pack| pack.paths.iter())
+        .map(|sym| {
+            <Paths as Into<MoveSymbol>>::into(sym.clone())
+                .as_str()
+                .to_owned()
+        })
+        .collect();
     // Step 1: parse the program to get comments and a separation of targets and dependencies.
     let (files, comments_and_compiler_res) =
         Compiler::from_package_paths(move_sources, deps, flags, known_attributes)
@@ -159,7 +184,8 @@ pub fn run_model_builder_with_options_and_compilation_flags<
                     empty_alias.clone(),
                     fname.as_str(),
                     fsrc,
-                    /* is_dep */ false,
+                    /* is_target */ true,
+                    target_sources_names.contains(fname.as_str()),
                 );
             }
             add_move_lang_diagnostics(&mut env, diags);
@@ -183,27 +209,35 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     {
         let fhash = member.def.file_hash();
         let (fname, fsrc) = files.get(&fhash).unwrap();
-        let is_dep = dep_files.contains(&fhash);
+        let is_target = !dep_files.contains(&fhash);
         let aliases = parsed_prog
             .named_address_maps
             .get(member.named_address_map)
             .iter()
             .map(|(symbol, addr)| (env.symbol_pool().make(symbol.as_str()), *addr))
             .collect();
-        env.add_source(fhash, Rc::new(aliases), fname.as_str(), fsrc, is_dep);
+        env.add_source(
+            fhash,
+            Rc::new(aliases),
+            fname.as_str(),
+            fsrc,
+            is_target,
+            target_sources_names.contains(fname.as_str()),
+        );
     }
 
     // If a move file does not contain any definition, it will not appear in `parsed_prog`. Add them explicitly.
     for fhash in files.keys().sorted() {
         if env.get_file_id(*fhash).is_none() {
             let (fname, fsrc) = files.get(fhash).unwrap();
-            let is_dep = dep_files.contains(fhash);
+            let is_target = !dep_files.contains(fhash);
             env.add_source(
                 *fhash,
                 Rc::new(BTreeMap::new()),
                 fname.as_str(),
                 fsrc,
-                is_dep,
+                is_target,
+                target_sources_names.contains(fname.as_str()),
             );
         }
     }

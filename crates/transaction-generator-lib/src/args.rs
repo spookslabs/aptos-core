@@ -57,6 +57,8 @@ pub enum TransactionTypeArg {
     FungibleAssetMint,
     TokenV2AmbassadorMint,
     TokenV2AmbassadorMintAndBurn1M,
+    LiquidityPoolSwap,
+    LiquidityPoolSwapStable,
     VectorPictureCreate30k,
     VectorPicture30k,
     VectorPictureRead30k,
@@ -67,6 +69,7 @@ pub enum TransactionTypeArg {
     SmartTablePicture1MWith256Change,
     SmartTablePicture1BWith256Change,
     SmartTablePicture1MWith1KChangeExceedsLimit,
+    DeserializeU256,
 }
 
 impl TransactionTypeArg {
@@ -351,6 +354,16 @@ impl TransactionTypeArg {
                 use_account_pool: sender_use_account_pool,
                 progress_type: workflow_progress_type,
             },
+            TransactionTypeArg::LiquidityPoolSwap => TransactionType::CallCustomModules {
+                entry_point: EntryPoints::LiquidityPoolSwap { is_stable: false },
+                num_modules: module_working_set_size,
+                use_account_pool: sender_use_account_pool,
+            },
+            TransactionTypeArg::LiquidityPoolSwapStable => TransactionType::CallCustomModules {
+                entry_point: EntryPoints::LiquidityPoolSwap { is_stable: true },
+                num_modules: module_working_set_size,
+                use_account_pool: sender_use_account_pool,
+            },
             TransactionTypeArg::VectorPictureCreate30k => TransactionType::CallCustomModules {
                 entry_point: EntryPoints::InitializeVectorPicture { length: 30 * 1024 },
                 num_modules: module_working_set_size,
@@ -420,6 +433,11 @@ impl TransactionTypeArg {
                     num_modules: module_working_set_size,
                     use_account_pool: sender_use_account_pool,
                 }
+            },
+            TransactionTypeArg::DeserializeU256 => TransactionType::CallCustomModules {
+                entry_point: EntryPoints::DeserializeU256,
+                num_modules: module_working_set_size,
+                use_account_pool: sender_use_account_pool,
             },
         }
     }

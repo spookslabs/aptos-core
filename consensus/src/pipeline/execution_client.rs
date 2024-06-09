@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    consensus_observer::{network::ObserverMessage, publisher::Publisher},
     counters,
     error::StateSyncError,
     network::{IncomingCommitRequest, IncomingRandGenRequest, NetworkSender},
@@ -28,7 +29,10 @@ use anyhow::Result;
 use aptos_bounded_executor::BoundedExecutor;
 use aptos_channels::{aptos_channel, message_queues::QueueStyle};
 use aptos_config::config::ConsensusConfig;
-use aptos_consensus_types::{common::Author, pipelined_block::PipelinedBlock};
+use aptos_consensus_types::{
+    common::{Author, Round},
+    pipelined_block::PipelinedBlock,
+};
 use aptos_executor_types::ExecutorResult;
 use aptos_infallible::RwLock;
 use aptos_logger::prelude::*;
@@ -63,6 +67,7 @@ pub trait TExecutionClient: Send + Sync {
         rand_config: Option<RandConfig>,
         fast_rand_config: Option<RandConfig>,
         rand_msg_rx: aptos_channel::Receiver<AccountAddress, IncomingRandGenRequest>,
+        highest_ordered_round: Round,
     );
 
     /// This is needed for some DAG tests. Clean this up as a TODO.
@@ -143,6 +148,7 @@ pub struct ExecutionProxyClient {
     // channels to buffer manager
     handle: Arc<RwLock<BufferManagerHandle>>,
     rand_storage: Arc<dyn RandStorage<AugmentedData>>,
+    observer_network: Option<NetworkClient<ObserverMessage>>,
 }
 
 impl ExecutionProxyClient {
@@ -154,6 +160,7 @@ impl ExecutionProxyClient {
         network_sender: ConsensusNetworkClient<NetworkClient<ConsensusMsg>>,
         bounded_executor: BoundedExecutor,
         rand_storage: Arc<dyn RandStorage<AugmentedData>>,
+        observer_network: Option<NetworkClient<ObserverMessage>>,
     ) -> Self {
         Self {
             consensus_config,
@@ -164,6 +171,7 @@ impl ExecutionProxyClient {
             bounded_executor,
             handle: Arc::new(RwLock::new(BufferManagerHandle::new())),
             rand_storage,
+            observer_network,
         }
     }
 
@@ -174,6 +182,8 @@ impl ExecutionProxyClient {
         rand_config: Option<RandConfig>,
         fast_rand_config: Option<RandConfig>,
         rand_msg_rx: aptos_channel::Receiver<AccountAddress, IncomingRandGenRequest>,
+        highest_ordered_round: Round,
+        publisher: Option<Publisher>,
     ) {
         let network_sender = NetworkSender::new(
             self.author,
@@ -220,6 +230,7 @@ impl ExecutionProxyClient {
                     rand_msg_rx,
                     reset_rand_manager_rx,
                     self.bounded_executor.clone(),
+                    highest_ordered_round,
                 ));
 
                 (
@@ -256,6 +267,7 @@ impl ExecutionProxyClient {
             reset_buffer_manager_rx,
             epoch_state,
             self.bounded_executor.clone(),
+            publisher,
         );
 
         tokio::spawn(execution_schedule_phase.start());
@@ -279,6 +291,7 @@ impl TExecutionClient for ExecutionProxyClient {
         rand_config: Option<RandConfig>,
         fast_rand_config: Option<RandConfig>,
         rand_msg_rx: aptos_channel::Receiver<AccountAddress, IncomingRandGenRequest>,
+        highest_ordered_round: Round,
     ) {
         let maybe_rand_msg_tx = self.spawn_decoupled_execution(
             commit_signer_provider,
@@ -286,6 +299,8 @@ impl TExecutionClient for ExecutionProxyClient {
             rand_config,
             fast_rand_config,
             rand_msg_rx,
+            highest_ordered_round,
+            self.observer_network.clone().map(Publisher::new),
         );
 
         let transaction_shuffler =
@@ -368,6 +383,10 @@ impl TExecutionClient for ExecutionProxyClient {
         fail_point!("consensus::sync_to", |_| {
             Err(anyhow::anyhow!("Injected error in sync_to").into())
         });
+
+        if target.commit_info().is_ordered_only() {
+            return Err(anyhow::anyhow!("Sync to ordered only target").into());
+        }
 
         let (reset_tx_to_rand_manager, reset_tx_to_buffer_manager) = {
             let handle = self.handle.read();
@@ -458,6 +477,7 @@ impl TExecutionClient for DummyExecutionClient {
         _rand_config: Option<RandConfig>,
         _fast_rand_config: Option<RandConfig>,
         _rand_msg_rx: aptos_channel::Receiver<AccountAddress, IncomingRandGenRequest>,
+        _highest_ordered_round: Round,
     ) {
     }
 
